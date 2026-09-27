@@ -182,41 +182,68 @@ describe('BookingsService', () => {
       endTime: '10:00:00',
       checkInRequestedAt: null,
     } as Booking;
-    const beforeWindow = new Date('2026-09-15T01:44:59.999Z');
-    const atWindow = new Date('2026-09-15T01:45:00.000Z');
-    const beforeEnd = new Date('2026-09-15T02:59:59.999Z');
-    const atEnd = new Date('2026-09-15T03:00:00.000Z');
+    const beforeWindow = new Date('2026-09-15T01:44:59.999Z'); // 08:44:59
+    const atWindow = new Date('2026-09-15T01:45:00.000Z'); // 08:45
+    const beforeDeadline = new Date('2026-09-15T02:14:59.999Z'); // 09:14:59
+    const atDeadline = new Date('2026-09-15T02:15:00.000Z'); // 09:15
 
-    expect(harness.service.canRequestCheckIn(booking, beforeWindow)).toBe(
+    expect(harness.service.canConfirmCheckIn(booking, beforeWindow)).toBe(
       false,
     );
-    expect(harness.service.canRequestCheckIn(booking, atWindow)).toBe(true);
-    expect(harness.service.canRequestCheckIn(booking, beforeEnd)).toBe(true);
-    expect(harness.service.canRequestCheckIn(booking, atEnd)).toBe(false);
+    expect(harness.service.canConfirmCheckIn(booking, atWindow)).toBe(true);
+    expect(harness.service.canConfirmCheckIn(booking, beforeDeadline)).toBe(
+      true,
+    );
+    expect(harness.service.canConfirmCheckIn(booking, atDeadline)).toBe(false);
     expect(
       harness.service.canConfirmCheckIn(
-        { ...booking, checkInRequestedAt: atWindow },
+        { ...booking, status: BookingStatus.CHECKED_IN },
         atWindow,
       ),
-    ).toBe(true);
-    expect(harness.service.canMarkNoShow(booking, beforeEnd)).toBe(false);
-    expect(harness.service.canMarkNoShow(booking, atEnd)).toBe(true);
+    ).toBe(false);
+    expect(harness.service.canMarkNoShow(booking, beforeDeadline)).toBe(false);
+    expect(harness.service.canMarkNoShow(booking, atDeadline)).toBe(true);
+    expect(harness.service.checkInDeadline(booking)).toEqual(atDeadline);
   });
 
-  it('reports whether a pending booking remains reviewable', () => {
+  it('allows cancellation before start even with a legacy check-in request', () => {
+    const { service } = createHarness();
+    const booking = {
+      status: BookingStatus.CONFIRMED,
+      date: '2026-09-15',
+      startTime: '09:00:00',
+      checkInRequestedAt: new Date('2026-09-15T01:45:00.000Z'),
+    } as Booking;
+
+    expect(
+      service.canCancel(booking, new Date('2026-09-15T01:50:00.000Z')),
+    ).toBe(true);
+    expect(
+      service.canCancel(booking, new Date('2026-09-15T02:00:00.000Z')),
+    ).toBe(false);
+    expect(
+      service.canCancel(
+        { ...booking, status: BookingStatus.CHECKED_IN },
+        new Date('2026-09-15T01:50:00.000Z'),
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps a pending booking reviewable only until its check-in deadline', () => {
     const harness = createHarness();
     const booking = {
       status: BookingStatus.PENDING,
       date: '2026-09-15',
       startTime: '08:00:00',
-      endTime: '09:00:00',
+      endTime: '10:00:00',
     } as Booking;
 
+    // The deadline is 08:15 on campus, 01:15 UTC; the end is much later.
     expect(
-      harness.service.canReview(booking, new Date('2026-09-15T01:59:59.999Z')),
+      harness.service.canReview(booking, new Date('2026-09-15T01:14:59.999Z')),
     ).toBe(true);
     expect(
-      harness.service.canReview(booking, new Date('2026-09-15T02:00:00.000Z')),
+      harness.service.canReview(booking, new Date('2026-09-15T01:15:00.000Z')),
     ).toBe(false);
     expect(
       harness.service.canReview(
@@ -283,7 +310,7 @@ describe('BookingsService', () => {
     }
 
     it('filters reviewable pending requests in SQL and paginates oldest first', async () => {
-      // 10:30 on campus (UTC+7).
+      // 10:30 on campus (UTC+7); requests starting after 10:15 are reviewable.
       const { service, findAndCount } = queueHarness(
         '2026-09-15T03:30:00.000Z',
       );
@@ -309,9 +336,9 @@ describe('BookingsService', () => {
         {
           status: BookingStatus.PENDING,
           date: '2026-09-15',
-          endTime: expect.objectContaining({
+          startTime: expect.objectContaining({
             _type: 'moreThan',
-            _value: '10:30',
+            _value: '10:15',
           }),
         },
       ]);
@@ -327,8 +354,29 @@ describe('BookingsService', () => {
       const [options] = findAndCount.mock.calls[0];
       expect(options.where[1]).toMatchObject({
         date: '2026-09-16',
-        endTime: expect.objectContaining({ _value: '06:30' }),
+        startTime: expect.objectContaining({ _value: '06:15' }),
       });
+    });
+
+    it('keeps the previous day reviewable in the first 15 minutes after midnight', async () => {
+      // 2026-09-15 17:10 UTC is 00:10 on 2026-09-16 on campus, so a request
+      // starting at 23:00 on 2026-09-15 is past its 23:15 deadline, and the
+      // cutoff falls on the previous campus date at 23:55.
+      const { service, findAndCount } = queueHarness(
+        '2026-09-15T17:10:00.000Z',
+      );
+
+      await service.findPendingForStaff(1, 20);
+      const [options] = findAndCount.mock.calls[0];
+      expect(options.where).toEqual([
+        expect.objectContaining({
+          date: expect.objectContaining({ _value: '2026-09-15' }),
+        }),
+        expect.objectContaining({
+          date: '2026-09-15',
+          startTime: expect.objectContaining({ _value: '23:55' }),
+        }),
+      ]);
     });
 
     it('paginates current and overdue operations with a stable order', async () => {

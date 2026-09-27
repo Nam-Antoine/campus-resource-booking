@@ -40,6 +40,8 @@ const studentBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
+  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  releasedAutomatically: false,
   cancelledAt: null,
   reviewedAt: null,
   rejectionReason: null,
@@ -73,6 +75,8 @@ const staffBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
+  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  releasedAutomatically: false,
   resource: studentBooking.resource,
   requester: {
     id: requesterId,
@@ -241,17 +245,19 @@ describe("booking response schema", () => {
 });
 
 describe("student booking timeline schema", () => {
-  it("accepts consumed codes only in terminal check-in lifecycle states", () => {
+  it("accepts code-free check-in and checkout without a student request", () => {
     const requestedAt = "2099-01-05T01:50:00.000Z";
     const checkedInAt = "2099-01-05T02:00:00.000Z";
     const checkedIn = {
       ...studentBooking,
       status: "checked_in",
       canCancel: false,
-      checkInRequestedAt: requestedAt,
       checkedInAt,
     };
     expect(parseStudentBooking(checkedIn)).toEqual(checkedIn);
+    expect(parseStudentBooking({ ...checkedIn, status: "completed", checkedOutAt: "2099-01-05T03:00:00.000Z" })).toMatchObject({ status: "completed", checkInRequestedAt: null });
+    expect(parseStaffBooking({ ...staffBooking, status: "checked_in", canReview: false, checkedInAt, canCheckOut: true })).toMatchObject({ status: "checked_in", checkInRequested: false });
+    expect(parseStaffBooking({ ...staffBooking, status: "confirmed", canReview: false, canConfirmCheckIn: true })).toMatchObject({ status: "confirmed", canConfirmCheckIn: true });
     expect(
       parseStudentBooking({ ...checkedIn, checkInCode: "482193" }),
     ).toBeNull();
@@ -269,9 +275,36 @@ describe("student booking timeline schema", () => {
         canCancel: false,
         hasEnded: true,
         checkInRequestedAt: requestedAt,
-        noShowAt: "2099-01-05T02:59:59.000Z",
+        noShowAt: "2099-01-05T02:14:59.000Z",
       }),
     ).toBeNull();
+    expect(
+      parseStudentBooking({ ...studentBooking, releasedAutomatically: true }),
+    ).toBeNull();
+    expect(
+      parseStudentBooking({ ...studentBooking, checkInDeadline: "not a time" }),
+    ).toBeNull();
+  });
+
+  it("accepts an expired request only when it was never reviewed or cancellable", () => {
+    const expired = { ...studentBooking, status: "expired", canCancel: false };
+    expect(parseStudentBooking(expired)).toMatchObject({ status: "expired" });
+    expect(parseStudentBooking({ ...expired, canCancel: true })).toBeNull();
+    expect(
+      parseStudentBooking({ ...expired, reviewedAt: "2099-01-05T01:00:00.000Z" }),
+    ).toBeNull();
+  });
+
+  it("accepts a booking released at its check-in deadline", () => {
+    expect(
+      parseStudentBooking({
+        ...studentBooking,
+        status: "no_show",
+        canCancel: false,
+        releasedAutomatically: true,
+        noShowAt: "2099-01-05T02:15:00.000Z",
+      }),
+    ).toMatchObject({ status: "no_show", releasedAutomatically: true });
   });
 
   it.each(["pending", "confirmed", "checked_in"] as const)(

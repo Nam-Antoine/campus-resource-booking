@@ -24,12 +24,17 @@ function required(name: string): string {
   return value;
 }
 
-function campusParts(now = new Date()): { date: string; hour: number } {
+function campusParts(now = new Date()): {
+  date: string;
+  hour: number;
+  minute: number;
+} {
   const parts = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
+    minute: '2-digit',
     hourCycle: 'h23',
     timeZone: 'Asia/Ho_Chi_Minh',
   }).formatToParts(now);
@@ -39,6 +44,7 @@ function campusParts(now = new Date()): { date: string; hour: number } {
   return {
     date: `${value.year}-${value.month}-${value.day}`,
     hour: Number(value.hour),
+    minute: Number(value.minute),
   };
 }
 
@@ -101,7 +107,10 @@ async function seed(client: Client): Promise<void> {
   }
   const rounds = Number(process.env.AUTH_BCRYPT_ROUNDS ?? 12);
   const passwordHash = await bcrypt.hash(password, rounds);
-  const { date: today, hour } = campusParts();
+  const { date: today, hour: currentHour, minute } = campusParts();
+  // Check-in closes 15 minutes after the start, and a booking not checked in
+  // by then is released. Past that point in the hour, use the next hour.
+  const hour = minute < 15 ? currentHour : currentHour + 1;
   const pendingDate = addDays(today, 2);
   const historyDate = addDays(today, -7);
 
@@ -206,12 +215,10 @@ async function seed(client: Client): Promise<void> {
     await client.query(
       `INSERT INTO bookings (
         resource_id, requester_id, booking_date, start_time, end_time, status,
-        reviewed_at, reviewed_by_id, check_in_code, check_in_requested_at,
-        checked_in_at, checked_in_by_id, checked_out_at, checked_out_by_id
+        reviewed_at, reviewed_by_id, checked_in_at, checked_in_by_id,
+        checked_out_at, checked_out_by_id
       ) VALUES (
         $1, $2, $3, '09:00', '11:00', 'completed', now(), $4,
-        NULL,
-        (($3::date + TIME '08:50') AT TIME ZONE 'Asia/Ho_Chi_Minh'),
         (($3::date + TIME '09:00') AT TIME ZONE 'Asia/Ho_Chi_Minh'), $4,
         (($3::date + TIME '11:00') AT TIME ZONE 'Asia/Ho_Chi_Minh'), $4
       )`,
@@ -243,8 +250,8 @@ async function seed(client: Client): Promise<void> {
   console.log(`  Pending approval date: ${pendingDate}`);
   console.log(
     hour <= 22
-      ? `  Check-in scenario: ${today} ${String(hour).padStart(2, '0')}:00-${String(hour + 1).padStart(2, '0')}:00 ICT`
-      : '  Check-in scenario omitted after 23:00 ICT; seed earlier in the day.',
+      ? `  Staff manual check-in (no code): ${today} ${String(hour).padStart(2, '0')}:00-${String(hour + 1).padStart(2, '0')}:00 ICT`
+      : '  Check-in scenario omitted after 22:15 ICT; seed earlier in the day.',
   );
 }
 

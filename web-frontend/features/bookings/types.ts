@@ -5,7 +5,9 @@ export type BookingStatus =
   | "completed"
   | "no_show"
   | "rejected"
-  | "cancelled";
+  | "cancelled"
+  /** Nobody reviewed the request by its check-in deadline; it holds no slot. */
+  | "expired";
 
 export type ActiveBookingStatus = "pending" | "confirmed";
 
@@ -29,6 +31,10 @@ export interface StudentBooking {
   canCancel: boolean;
   canRequestCheckIn: boolean;
   hasEnded: boolean;
+  /** Check-in closes, and an unchecked confirmed booking is released, at this instant. */
+  checkInDeadline: string;
+  /** True when the booking was released because nobody checked in by the deadline. */
+  releasedAutomatically: boolean;
   checkInCode: string | null;
   checkInRequestedAt: string | null;
   checkedInAt: string | null;
@@ -82,6 +88,10 @@ export interface StaffBooking {
   canConfirmCheckIn: boolean;
   canCheckOut: boolean;
   canMarkNoShow: boolean;
+  /** Check-in closes, and an unchecked confirmed booking is released, at this instant. */
+  checkInDeadline: string;
+  /** True when the booking was released because nobody checked in by the deadline. */
+  releasedAutomatically: boolean;
   checkedInAt: string | null;
   checkedOutAt: string | null;
   noShowAt: string | null;

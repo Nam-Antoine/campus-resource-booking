@@ -3,7 +3,10 @@ import { CAMPUS_TIME_ZONE } from '../../resources/dto/resource-availability-quer
 import { User } from '../../users/entities/user.entity';
 import { Booking } from '../entities/booking.entity';
 import { BookingStatus } from '../enums/booking-status.enum';
-import { StudentBookingResourceDto } from './student-booking-response.dto';
+import {
+  isReleasedAutomatically,
+  StudentBookingResourceDto,
+} from './student-booking-response.dto';
 
 export class StaffBookingRequesterDto {
   @ApiProperty({ format: 'uuid' })
@@ -53,7 +56,9 @@ export class StaffBookingResponseDto {
   @ApiProperty({ description: 'Whether staff can review this request now' })
   canReview: boolean;
 
-  @ApiProperty({ description: 'Whether the student has generated a code' })
+  @ApiProperty({
+    description: 'Legacy request indicator; no longer required for check-in',
+  })
   checkInRequested: boolean;
 
   @ApiProperty({ description: 'Whether staff can confirm check-in now' })
@@ -64,6 +69,18 @@ export class StaffBookingResponseDto {
 
   @ApiProperty({ description: 'Whether staff can record a no-show' })
   canMarkNoShow: boolean;
+
+  @ApiProperty({
+    description:
+      'When check-in closes: 15 minutes after the start. A confirmed booking not checked in by staff by then is released.',
+  })
+  checkInDeadline: Date;
+
+  @ApiProperty({
+    description:
+      'True when the booking was released automatically because nobody checked in by the deadline',
+  })
+  releasedAutomatically: boolean;
 
   @ApiPropertyOptional({ nullable: true })
   checkedInAt: Date | null;
@@ -90,6 +107,7 @@ export class StaffBookingResponseDto {
       canConfirmCheckIn: boolean;
       canCheckOut: boolean;
       canMarkNoShow: boolean;
+      checkInDeadline: Date;
     },
   ): StaffBookingResponseDto {
     return {
@@ -107,6 +125,8 @@ export class StaffBookingResponseDto {
       canConfirmCheckIn: actions.canConfirmCheckIn,
       canCheckOut: actions.canCheckOut,
       canMarkNoShow: actions.canMarkNoShow,
+      checkInDeadline: actions.checkInDeadline,
+      releasedAutomatically: isReleasedAutomatically(booking),
       checkedInAt: booking.checkedInAt,
       checkedOutAt: booking.checkedOutAt,
       noShowAt: booking.noShowAt,

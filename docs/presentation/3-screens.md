@@ -19,7 +19,7 @@ flowchart TD
         SD --> RS["/resources<br/>Search"]
         RS --> RD["/resources/:id<br/>Availability + booking"]
         SD --> MB["/bookings<br/>My bookings"]
-        MB --> BD["/bookings/:id<br/>Details, cancel, check-in code"]
+        MB --> BD["/bookings/:id<br/>Details, cancel, confirmation"]
         RD --> MB
     end
 
@@ -144,11 +144,11 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 
 ┌─ ← Back to my bookings ────────────────────────────────────────┐
 │ Lab L201   Time · Status · Type · Building · Location          │
-│ ┌ Show this code to campus staff ┐                             │
-│ │          4 8 2 9 1 3           │  Use once ·                 │
-│ └────────────────────────────────┘  Do not share               │
-│ [Generate check-in code]     [Cancel booking]                  │
-│ (opens 15 min before start)  (asks "Release this time slot?")  │
+│ ┌ Confirmed booking: show staff ──────────────────────────────┐ │
+│ │ Student · booking ID · resource · building · date and time │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│ [Cancel booking] (while eligible)                               │
+│ Not checked in by start + 15 min → released for others         │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -161,13 +161,13 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 ┌─ Approval queue ───────────────────────────────────────────────┐
 │ Booking requests awaiting a decision.          5 Pending       │
 │ 5 Requests to review · 3 Open visits to manage                 │
-│ 1 Codes ready to verify · 2 Active visits                      │
+│ 1 Arrival ready to confirm · 2 Active visits                   │
 ├────────────────────────────────┬───────────────────────────────┤
 │ Arrivals and unresolved visits │ Pending approval queue        │
-│ [Code ready for staff]         │ Oldest request first          │
+│ [Arrival ready for staff]      │ Oldest request first          │
 │   Lab L201 09:00 Open visit →  │ 1. Room B204 · Tue 14:00      │
 │ [Ready for checkout]           │    Review request →           │
-│ [Ready for no-show review]     │ 2. Lab L305 · Wed 08:00       │
+│ [Check-in missed]              │ 2. Lab L305 · Wed 08:00       │
 └────────────────────────────────┴───────────────────────────────┘
 ```
 
@@ -181,7 +181,7 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 │ University email │ [Reject with reason]   │ 13:00  other       │
 │ Requested at     │ ── on the day ──       │ 14:00 This request │
 │ Type · Building  │ Confirm campus arrival │ 16:00  other       │
-│ Location         │ Code [000000]          │                    │
+│ Location         │ Match booking details  │                    │
 │                  │ [Confirm check-in]     │                    │
 │                  │ [Confirm check-out]    │                    │
 │                  │ [Mark as no-show]      │                    │
@@ -214,12 +214,14 @@ Admin pages share a top bar: **Resources · Users · Analytics · Approvals** (A
 ### Users `/admin/users`
 ```
 ┌─ Put the right access in the right hands ──────────────────────┐
+│ Roles are fixed when an account is created.                    │
+│ [Create staff account] → name · USTH email · initial password  │
 │ Search users [_____]  Role [All ▾]  Access [All ▾]  [Search]   │
 ├────────────────────────────────────────────────────────────────┤
-│ Account                   Role         Joined  Access          │
-│ student.demo@usth.edu.vn  [Student ▾]  Sep 20  [Deactivate]    │
-│ staff.lab@usth.edu.vn     [Staff ▾]    Sep 01  [Deactivate]    │
-│ → every change asks "Confirm access change"                    │
+│ Account                   Role     Joined  Access              │
+│ student.demo@usth.edu.vn  Student  Sep 20  [Deactivate]        │
+│ staff.lab@usth.edu.vn     Staff    Sep 01  [Deactivate]        │
+│ → each (de)activation asks "Confirm access change"             │
 └────────────────────────────────────────────────────────────────┘
 ```
 

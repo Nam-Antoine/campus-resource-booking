@@ -107,12 +107,14 @@
 .actionPanel h2 { margin: 15px 0 0; font-family: var(--font-display); font-size: 1.35rem; }
 .actionPanel h2:focus { outline: 3px solid rgba(42,60,149,.2); outline-offset: 3px; }
 .actionPanel > p { margin: 9px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.6; }
-.checkInButton { width: 100%; min-height: 48px; margin-top: 20px; color: white; border: 0; border-radius: 11px; background: var(--usth-blue); cursor: pointer; font-weight: 800; }
-.checkInButton:disabled { cursor: wait; opacity: .68; }
-.checkInCode { display: grid; justify-items: center; gap: 4px; margin-top: 20px; padding: 18px; color: var(--usth-blue-deep); border: 1px solid rgba(42,60,149,.2); border-radius: 14px; background: #f0f3ff; }
-.checkInCode span { font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.checkInCode strong { font-family: var(--font-display); font-size: 2.5rem; line-height: 1.1; letter-spacing: .16em; }
-.checkInCode small { color: var(--muted); font-size: .68rem; text-align: center; }
+.confirmation { display: grid; gap: 12px; margin-top: 20px; padding: 20px; color: var(--usth-blue-deep); border: 1px solid rgba(42,60,149,.22); border-radius: 14px; background: rgba(240,243,255,.85); }
+.confirmation h3 { margin: 0; font-family: var(--font-display); font-size: 1.2rem; }
+.confirmation p, .confirmation small { margin: 0; font-size: .78rem; line-height: 1.55; }
+.confirmation dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px 20px; margin: 0; }
+.confirmation dl div { padding-top: 9px; border-top: 1px solid rgba(42,60,149,.15); }
+.confirmation dt { font-size: .72rem; color: #43517f; }
+.confirmation dd { margin: 3px 0 0; font-size: .82rem; font-weight: 750; overflow-wrap: anywhere; }
+.confirmation small { color: #43517f; }
 .cancelButton { width: 100%; min-height: 44px; margin-top: 20px; color: var(--usth-red-dark); border: 1px solid rgba(236,34,39,.24); border-radius: 11px; background: rgba(236,34,39,.055); cursor: pointer; font-weight: 800; }
 .confirmCancel { display: grid; gap: 5px; margin-top: 20px; padding: 15px; border: 1px solid rgba(236,34,39,.18); border-radius: 12px; background: rgba(236,34,39,.045); }
 .confirmCancel span { color: var(--muted); font-size: .74rem; }
@@ -147,9 +149,9 @@
   .detailHero { align-items: flex-start; flex-direction: column-reverse; }
   .detailHero time { width: 86px; height: 92px; }
   .detailHero time strong { font-size: 2.3rem; }
-  .detailGrid, .detailFacts { grid-template-columns: 1fr; }
+  .detailGrid, .detailFacts, .confirmation dl { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .intro a, .detailLink, .cancelButton, .checkInButton, .confirmCancel button { scroll-behavior: auto; }
+  .intro a, .detailLink, .cancelButton, .confirmCancel button { scroll-behavior: auto; }
 }

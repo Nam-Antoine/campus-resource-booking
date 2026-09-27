@@ -10,10 +10,11 @@ const STUDENT_EMAIL = `users.student.${RUN_ID}@usth.edu.vn`;
 const SEARCH_EMAIL = `unique.directory.${RUN_ID}@usth.edu.vn`;
 const RACE_ADMIN_A_EMAIL = `users.race-a.${RUN_ID}@usth.edu.vn`;
 const RACE_ADMIN_B_EMAIL = `users.race-b.${RUN_ID}@usth.edu.vn`;
+const STAFF_EMAIL = `users.new-staff.${RUN_ID}@usth.edu.vn`;
 const PASSWORD = 'password123';
 const COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'access_token';
 
-describe('Admin user and role management (e2e)', () => {
+describe('Admin user and staff account management (e2e)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
   let adminCookie: string;
@@ -133,6 +134,8 @@ describe('Admin user and role management (e2e)', () => {
       SEARCH_EMAIL,
       RACE_ADMIN_A_EMAIL,
       RACE_ADMIN_B_EMAIL,
+      STAFF_EMAIL,
+      `extra.${STAFF_EMAIL}`,
     ]);
     await app.close();
   });
@@ -219,50 +222,83 @@ describe('Admin user and role management (e2e)', () => {
       .expect(400);
   });
 
-  it('assigns staff and administrator roles', async () => {
+  it('creates a staff account that can sign in with the initial password', async () => {
     await api()
-      .patch(`/api/admin/users/${searchId}/role`)
+      .post('/api/admin/users')
+      .set('Cookie', studentCookie)
+      .send({ email: STAFF_EMAIL, password: PASSWORD, fullName: 'New Staff' })
+      .expect(403);
+
+    const created = await api()
+      .post('/api/admin/users')
       .set('Cookie', adminCookie)
-      .send({ role: 'staff' })
-      .expect(200)
-      .expect(({ body }) =>
-        expect(body).toMatchObject({ id: searchId, role: 'staff' }),
-      );
+      .send({
+        email: `  ${STAFF_EMAIL.toUpperCase()} `,
+        password: PASSWORD,
+        fullName: '  New Staff  ',
+      })
+      .expect(201);
+    expect(created.body).toMatchObject({
+      email: STAFF_EMAIL,
+      fullName: 'New Staff',
+      role: 'staff',
+      isActive: true,
+    });
+    expect(created.body).not.toHaveProperty('password');
+    expect(created.body).not.toHaveProperty('passwordHash');
+    expect(created.headers['set-cookie']).toBeUndefined();
+
+    const login = await api()
+      .post('/api/auth/login')
+      .send({ email: STAFF_EMAIL, password: PASSWORD })
+      .expect(200);
+    expect(login.body).toMatchObject({ email: STAFF_EMAIL, role: 'staff' });
 
     await api()
-      .patch(`/api/admin/users/${searchId}/role`)
+      .post('/api/admin/users')
       .set('Cookie', adminCookie)
-      .send({ role: 'admin' })
-      .expect(200)
-      .expect(({ body }) =>
-        expect(body).toMatchObject({ id: searchId, role: 'admin' }),
-      );
+      .send({ email: STAFF_EMAIL, password: PASSWORD, fullName: 'Duplicate' })
+      .expect(409);
   });
 
-  it('prevents administrators from changing their own role or access', async () => {
+  it('validates new staff account details', async () => {
+    for (const body of [
+      { email: 'staff@gmail.com', password: PASSWORD, fullName: 'Outside' },
+      { email: STAFF_EMAIL, password: 'short', fullName: 'Short Password' },
+      { email: STAFF_EMAIL, password: PASSWORD, fullName: '' },
+      {
+        email: `extra.${STAFF_EMAIL}`,
+        password: PASSWORD,
+        fullName: 'Extra Field',
+        role: 'admin',
+      },
+    ]) {
+      await api()
+        .post('/api/admin/users')
+        .set('Cookie', adminCookie)
+        .send(body)
+        .expect(400);
+    }
+  });
+
+  it('offers no way to change an account role', async () => {
     await api()
-      .patch(`/api/admin/users/${adminId}/role`)
+      .patch(`/api/admin/users/${otherAdminId}/role`)
       .set('Cookie', adminCookie)
       .send({ role: 'student' })
-      .expect(400);
+      .expect(404);
+    await api()
+      .get('/api/admin/users')
+      .set('Cookie', otherAdminCookie)
+      .expect(200);
+  });
+
+  it('prevents administrators from changing their own access', async () => {
     await api()
       .patch(`/api/admin/users/${adminId}/status`)
       .set('Cookie', adminCookie)
       .send({ isActive: false })
       .expect(400);
-  });
-
-  it('applies role changes to an existing session immediately', async () => {
-    await api()
-      .patch(`/api/admin/users/${otherAdminId}/role`)
-      .set('Cookie', adminCookie)
-      .send({ role: 'staff' })
-      .expect(200);
-
-    await api()
-      .get('/api/admin/users')
-      .set('Cookie', otherAdminCookie)
-      .expect(403);
   });
 
   it('deactivates an account, invalidates its session, and blocks login', async () => {
@@ -361,9 +397,9 @@ describe('Admin user and role management (e2e)', () => {
 
   it('returns 404 for an unknown target', async () => {
     await api()
-      .patch('/api/admin/users/99999999-9999-4999-8999-999999999999/role')
+      .patch('/api/admin/users/99999999-9999-4999-8999-999999999999/status')
       .set('Cookie', adminCookie)
-      .send({ role: 'staff' })
+      .send({ isActive: false })
       .expect(404);
   });
 });

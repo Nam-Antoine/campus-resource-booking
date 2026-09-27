@@ -171,19 +171,6 @@ export class UsersService {
     );
   }
 
-  async updateRole(
-    actorId: string,
-    targetId: string,
-    role: UserRole,
-  ): Promise<User> {
-    return this.updateManagedUser(actorId, targetId, (target) => {
-      if (target.role === UserRole.ADMIN && role !== UserRole.ADMIN) {
-        return { role, removesActiveAdmin: target.isActive };
-      }
-      return { role, removesActiveAdmin: false };
-    });
-  }
-
   async updateStatus(
     actorId: string,
     targetId: string,
@@ -215,7 +202,7 @@ export class UsersService {
   private async updateManagedUser(
     actorId: string,
     targetId: string,
-    change: (target: User) => Partial<Pick<User, 'role' | 'isActive'>> & {
+    change: (target: User) => Partial<Pick<User, 'isActive'>> & {
       removesActiveAdmin: boolean;
     },
   ): Promise<User> {

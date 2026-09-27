@@ -28,13 +28,16 @@ Use a disposable migrated PostgreSQL database:
 ```bash
 cd web-backend
 npm run migration:run
+# On this disposable database ONLY, with no check-in records, verify the
+# latest migration can be reverted. Manual check-in migration rollback may
+# still refuse if it cleared outstanding legacy codes; do not force it.
 npm run migration:revert
 npm run migration:run
 npm run typeorm -- schema:log
 npm run test:e2e -- --runInBand
 ```
 
-Required result: TypeORM reports `Your schema is up to date` and every E2E suite passes. Review new migrations for destructive statements and verify each entity index has a migration counterpart.
+Required result: TypeORM reports `Your schema is up to date` and every E2E suite passes. Review new migrations for destructive statements and verify each entity index has a migration counterpart. For an existing database, test the **forward migration on a restored copy with representative legacy check-in rows** instead of running `migration:revert` against live data. Migration `1727000000000` clears outstanding codes and intentionally refuses rollback if check-in history would become incompatible.
 
 ## 3. API documentation review
 
@@ -88,7 +91,7 @@ The seed is idempotent: rerunning it removes and recreates only `demo.*@usth.edu
 - Admin: `demo.admin@usth.edu.vn`
 - A pending approval request
 - Completed student history
-- A current confirmed visit when seeded before 23:00 ICT
+- A confirmed visit for the current hour (or the next hour after hh:15) when seeded before 22:15 ICT. Check-in closes 15 minutes after its start, and the booking is released automatically if nobody is checked in by then
 - Room, laboratory, and equipment inventory for analytics
 
 Remove it after the demonstration:
@@ -141,20 +144,20 @@ Use the Playwright CLI instructions in `AGENTS.md`. Exercise real actions, not p
 2. Search by date/time and inspect live availability.
 3. Book an available resource.
 4. Confirm pending or confirmed state and history.
-5. During the 15-minute check-in window, generate a code.
+5. Show the confirmed booking details in the student account to staff; staff compare the booking reference, student, resource, and time against their system record.
 6. After staff check-out, confirm completed history.
 
 ### Staff
 
 1. Review the oldest pending request.
 2. Approve one request and reject another with a reason.
-3. Verify a student code, confirm check-in, and check out.
+3. Match the student's confirmation to the booking in the staff system, confirm check-in during the check-in window, and check out.
 4. Verify empty operations and approval states.
 
 ### Admin
 
 1. Create/edit a resource, change status, and manage a closure.
-2. Search a user, change a role, deactivate/reactivate the account.
+2. Create a staff account, sign in with it, then search for it and deactivate/reactivate it.
 3. Filter analytics by date and verify empty/populated ranges.
 
 For every role, test representative desktop and 390px mobile widths, keyboard focus, 44px+ primary targets, reduced motion, horizontal overflow, console errors, and failed requests. Delete temporary accounts/bookings/resources and close browser sessions afterward.

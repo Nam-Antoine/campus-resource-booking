@@ -18,13 +18,15 @@ const base = {
   reviewedAt: null,
   rejectionReason: null,
   canReview: false,
-  checkInRequested: true,
+  checkInRequested: false,
   canConfirmCheckIn: true,
   canCheckOut: false,
   canMarkNoShow: false,
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
+  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  releasedAutomatically: false,
   resource: {
     id: "20000000-0000-4000-8000-000000000001",
     code: "ROOM-A101",
@@ -55,7 +57,7 @@ describe("staff lifecycle browser API", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:18320/api/");
   });
 
-  it("posts a six-digit code with cookie credentials and validates the transition", async () => {
+  it("confirms without a code or body using cookie credentials and validates the transition", async () => {
     const checkedIn = {
       ...base,
       status: "checked_in",
@@ -65,7 +67,7 @@ describe("staff lifecycle browser API", () => {
     };
     const request = vi.fn<typeof fetch>().mockResolvedValue(response(checkedIn));
 
-    await expect(confirmStaffCheckIn(id, "482193", request)).resolves.toEqual(
+    await expect(confirmStaffCheckIn(id, request)).resolves.toEqual(
       checkedIn,
     );
     expect(request).toHaveBeenCalledWith(
@@ -73,13 +75,13 @@ describe("staff lifecycle browser API", () => {
       expect.objectContaining({
         method: "PATCH",
         credentials: "include",
-        body: JSON.stringify({ code: "482193" }),
       }),
     );
+    expect(request.mock.calls[0][1]).not.toHaveProperty("body");
   });
 
   it.each([
-    [400, "validation", "six-digit code"],
+    [400, "validation", "Refresh and try again"],
     [401, "session", "updating this visit"],
     [403, "forbidden", "staff accounts"],
     [404, "not-found", "no longer exists"],
@@ -91,7 +93,7 @@ describe("staff lifecycle browser API", () => {
         .fn<typeof fetch>()
         .mockResolvedValue(response({}, status));
       await expect(
-        confirmStaffCheckIn(id, "482193", request),
+        confirmStaffCheckIn(id, request),
       ).rejects.toMatchObject({
         code,
         message: expect.stringContaining(message),

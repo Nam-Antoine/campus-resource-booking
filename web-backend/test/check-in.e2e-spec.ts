@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import request from 'supertest';
+import { BookingsService } from '../src/bookings/bookings.service';
 import { createTestApp, deleteUsers, findSetCookie } from './utils/test-app';
 
 jest.setTimeout(15_000);
@@ -81,7 +82,7 @@ describe('Check-in and checkout (e2e)', () => {
     await app.close();
   });
 
-  it('generates one code, confirms check-in, and completes checkout', async () => {
+  it('manually confirms check-in without student action, records the actor, and completes checkout', async () => {
     const created = await api()
       .post('/api/bookings')
       .set('Cookie', studentCookie)
@@ -96,39 +97,27 @@ describe('Check-in and checkout (e2e)', () => {
 
     await api()
       .patch(`/api/bookings/mine/${bookingId}/check-in`)
-      .set('Cookie', staffCookie)
-      .expect(403);
-
-    const generationResponses = await Promise.all([
-      api()
-        .patch(`/api/bookings/mine/${bookingId}/check-in`)
-        .set('Cookie', studentCookie),
-      api()
-        .patch(`/api/bookings/mine/${bookingId}/check-in`)
-        .set('Cookie', studentCookie),
-    ]);
-    expect(generationResponses.map(({ status }) => status).sort()).toEqual([
-      200, 409,
-    ]);
-    const requested = generationResponses.find(
-      ({ status }) => status === 200,
-    ) as request.Response;
-    expect(requested.body).toMatchObject({
-      id: bookingId,
-      status: 'confirmed',
-      canCancel: false,
-      canRequestCheckIn: false,
-      checkInCode: expect.stringMatching(/^\d{6}$/),
-      checkInRequestedAt: expect.any(String),
-    });
-
-    await api()
-      .patch(`/api/bookings/mine/${bookingId}/check-in`)
       .set('Cookie', studentCookie)
-      .expect(409);
+      .expect(404);
+    const studentView = await api()
+      .get(`/api/bookings/mine/${bookingId}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(studentView.body).toMatchObject({
+      canRequestCheckIn: false,
+      checkInRequestedAt: null,
+    });
+    expect(studentView.body).toHaveProperty('checkInCode', null);
+    await api()
+      .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
+      .set('Cookie', studentCookie)
+      .expect(403);
+    await api()
+      .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
+      .set('Cookie', staffCookie)
+      .send({ code: '123456' })
+      .expect(400);
 
-    // Operations are ordered by date, so this far-future booking is on the
-    // last page even when the database holds unrelated rows.
     const head = await api()
       .get('/api/staff/bookings/operations?pageSize=50')
       .set('Cookie', staffCookie)
@@ -139,30 +128,17 @@ describe('Check-in and checkout (e2e)', () => {
       )
       .set('Cookie', staffCookie)
       .expect(200);
-    const operation = lastPage.body.items.find(
-      (item: { id: string }) => item.id === bookingId,
-    );
-    expect(operation).toMatchObject({
-      checkInRequested: true,
-      canConfirmCheckIn: true,
-    });
-    expect(operation).not.toHaveProperty('checkInCode');
-
-    await api()
-      .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
-      .set('Cookie', staffCookie)
-      .send({ code: '000000' })
-      .expect(409);
+    expect(
+      lastPage.body.items.find((item: { id: string }) => item.id === bookingId),
+    ).toMatchObject({ checkInRequested: false, canConfirmCheckIn: true });
 
     const checkInResponses = await Promise.all([
       api()
         .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
-        .set('Cookie', staffCookie)
-        .send({ code: requested.body.checkInCode }),
+        .set('Cookie', staffCookie),
       api()
         .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
-        .set('Cookie', staffCookie)
-        .send({ code: requested.body.checkInCode }),
+        .set('Cookie', staffCookie),
     ]);
     expect(checkInResponses.map(({ status }) => status).sort()).toEqual([
       200, 409,
@@ -172,15 +148,27 @@ describe('Check-in and checkout (e2e)', () => {
     ) as request.Response;
     expect(checkedIn.body).toMatchObject({
       status: 'checked_in',
-      checkInRequested: true,
+      checkInRequested: false,
       canCheckOut: true,
-      checkedInAt: expect.any(String),
+      checkedInAt: now.toISOString(),
     });
-    expect(checkedIn.body).not.toHaveProperty('checkInCode');
-    const [persistedAfterCheckIn] = await dataSource.query<
-      { check_in_code: string | null }[]
-    >('SELECT check_in_code FROM bookings WHERE id = $1', [bookingId]);
-    expect(persistedAfterCheckIn.check_in_code).toBeNull();
+    const [persisted] = await dataSource.query<
+      {
+        check_in_code: string | null;
+        check_in_requested_at: Date | null;
+        checked_in_at: Date;
+        checked_in_by_id: string;
+      }[]
+    >(
+      'SELECT check_in_code, check_in_requested_at, checked_in_at, checked_in_by_id FROM bookings WHERE id = $1',
+      [bookingId],
+    );
+    expect(persisted).toEqual({
+      check_in_code: null,
+      check_in_requested_at: null,
+      checked_in_at: now,
+      checked_in_by_id: staffId,
+    });
 
     const completed = await api()
       .patch(`/api/staff/bookings/${bookingId}/check-out`)
@@ -195,18 +183,92 @@ describe('Check-in and checkout (e2e)', () => {
       .patch(`/api/staff/bookings/${bookingId}/check-out`)
       .set('Cookie', staffCookie)
       .expect(409);
-
-    const studentDetail = await api()
+    const detail = await api()
       .get(`/api/bookings/mine/${bookingId}`)
       .set('Cookie', studentCookie)
       .expect(200);
-    expect(studentDetail.body).toMatchObject({
+    expect(detail.body).toMatchObject({
       status: 'completed',
-      checkInCode: null,
-      checkInRequestedAt: expect.any(String),
+      checkInRequestedAt: null,
       checkedInAt: expect.any(String),
       checkedOutAt: expect.any(String),
     });
+    expect(detail.body).toHaveProperty('checkInCode', null);
+  });
+
+  it('retires an outstanding legacy code without requiring a new request', async () => {
+    now = new Date('2099-01-20T02:50:00.000Z'); // 09:50 ICT
+    const [legacy] = await dataSource.query<{ id: string }[]>(
+      `
+      INSERT INTO bookings (resource_id, requester_id, booking_date, start_time, end_time,
+        status, check_in_requested_at)
+      VALUES ($1, $2, '2099-01-20', '10:00', '11:00', 'confirmed', $3)
+      RETURNING id`,
+      [resourceId, studentId, now],
+    );
+    await api()
+      .patch(`/api/staff/bookings/${legacy.id}/confirm-check-in`)
+      .set('Cookie', staffCookie)
+      .send({ code: '123456' })
+      .expect(400);
+    const view = await api()
+      .get(`/api/bookings/mine/${legacy.id}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(view.body).toHaveProperty('checkInCode', null);
+    await api()
+      .patch(`/api/staff/bookings/${legacy.id}/confirm-check-in`)
+      .set('Cookie', staffCookie)
+      .expect(200);
+    const [persisted] = await dataSource.query<
+      { checked_in_by_id: string; check_in_code: string | null }[]
+    >('SELECT checked_in_by_id, check_in_code FROM bookings WHERE id = $1', [
+      legacy.id,
+    ]);
+    expect(persisted).toEqual({
+      checked_in_by_id: staffId,
+      check_in_code: null,
+    });
+    await api()
+      .patch(`/api/staff/bookings/${legacy.id}/check-out`)
+      .set('Cookie', staffCookie)
+      .expect(200);
+  });
+
+  it('allows the student to cancel a confirmed legacy request before start', async () => {
+    now = new Date('2099-01-20T02:50:00.000Z'); // 09:50 ICT
+    const [legacy] = await dataSource.query<{ id: string }[]>(
+      `INSERT INTO bookings (
+        resource_id, requester_id, booking_date, start_time, end_time, status,
+        check_in_requested_at
+      ) VALUES ($1, $2, '2099-01-20', '11:00', '12:00', 'confirmed',
+        '2099-01-20T03:45:00.000Z')
+      RETURNING id`,
+      [resourceId, studentId],
+    );
+    const view = await api()
+      .get(`/api/bookings/mine/${legacy.id}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(view.body).toMatchObject({
+      canCancel: true,
+      canRequestCheckIn: false,
+    });
+    expect(view.body).toHaveProperty('checkInCode', null);
+
+    const cancelled = await api()
+      .patch(`/api/bookings/mine/${legacy.id}/cancel`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(cancelled.body).toMatchObject({
+      status: 'cancelled',
+      canCancel: false,
+      checkInRequestedAt: null,
+    });
+    await api()
+      .patch(`/api/bookings/mine/${legacy.id}/cancel`)
+      .set('Cookie', studentCookie)
+      .expect(409);
   });
 
   it('keeps overdue unresolved visits on the staff operations dashboard', async () => {
@@ -292,7 +354,7 @@ describe('Check-in and checkout (e2e)', () => {
     }
   });
 
-  it('keeps only requests that have not ended in campus time in the pending queue', async () => {
+  it('keeps only requests before their check-in deadline in the pending queue', async () => {
     now = new Date('2099-01-20T03:30:00.000Z'); // 10:30 ICT
     const rows = await dataSource.query<{ id: string }[]>(
       `INSERT INTO bookings (
@@ -300,8 +362,9 @@ describe('Check-in and checkout (e2e)', () => {
       ) VALUES
         ($1, $2, '2099-01-19', '15:00', '16:00', 'pending'),
         ($1, $2, '2099-01-20', '07:00', '08:00', 'pending'),
-        ($1, $2, '2099-01-20', '10:00', '11:00', 'pending'),
-        ($1, $2, '2099-01-21', '08:00', '09:00', 'pending')
+        ($1, $2, '2099-01-20', '11:00', '12:00', 'pending'),
+        ($1, $2, '2099-01-21', '08:00', '09:00', 'pending'),
+        ($1, $2, '2099-01-20', '10:00', '11:00', 'pending')
       RETURNING id`,
       [resourceId, studentId],
     );
@@ -326,13 +389,16 @@ describe('Check-in and checkout (e2e)', () => {
     expect(ids).toEqual(expect.arrayContaining([idAt(2), idAt(3)]));
     expect(ids).not.toContain(idAt(0));
     expect(ids).not.toContain(idAt(1));
+    // Not ended yet, but its 10:15 check-in deadline has passed.
+    expect(ids).not.toContain(idAt(4));
     expect(items.every((item) => item.canReview)).toBe(true);
 
-    // Independent timestamp-based formulation of "has not ended yet".
+    // Independent timestamp-based formulation of "deadline not passed yet".
     const [{ count }] = await dataSource.query<{ count: string }[]>(
       `SELECT count(*)::text AS count FROM bookings
        WHERE status = 'pending'
-         AND (booking_date + end_time) AT TIME ZONE 'Asia/Ho_Chi_Minh' > $1`,
+         AND (booking_date + start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh'
+           + INTERVAL '15 minutes' > $1`,
       [now.toISOString()],
     );
     expect(head.body.total).toBe(Number(count));
@@ -342,7 +408,7 @@ describe('Check-in and checkout (e2e)', () => {
     ]);
   });
 
-  it('rejects early check-in and permits no-show only after the booking ends', async () => {
+  it('rejects early check-in and permits no-show only after the check-in deadline', async () => {
     now = new Date('2099-01-20T02:00:00.000Z'); // 09:00 ICT
     const created = await api()
       .post('/api/bookings')
@@ -357,8 +423,8 @@ describe('Check-in and checkout (e2e)', () => {
     const bookingId = created.body.id as string;
 
     await api()
-      .patch(`/api/bookings/mine/${bookingId}/check-in`)
-      .set('Cookie', studentCookie)
+      .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
+      .set('Cookie', staffCookie)
       .expect(409);
     await api()
       .patch(`/api/staff/bookings/${bookingId}/no-show`)
@@ -369,7 +435,13 @@ describe('Check-in and checkout (e2e)', () => {
       .set('Cookie', staffCookie)
       .expect(409);
 
-    now = new Date('2099-01-20T05:00:00.000Z'); // 12:00 ICT
+    now = new Date('2099-01-20T04:14:59.000Z'); // 11:14:59 ICT
+    await api()
+      .patch(`/api/staff/bookings/${bookingId}/no-show`)
+      .set('Cookie', staffCookie)
+      .expect(409);
+
+    now = new Date('2099-01-20T04:15:00.000Z'); // 11:15 ICT, the deadline
     const noShow = await api()
       .patch(`/api/staff/bookings/${bookingId}/no-show`)
       .set('Cookie', staffCookie)
@@ -378,6 +450,7 @@ describe('Check-in and checkout (e2e)', () => {
       status: 'no_show',
       checkInRequested: false,
       noShowAt: expect.any(String),
+      releasedAutomatically: false,
     });
     await api()
       .patch(`/api/staff/bookings/${bookingId}/no-show`)
@@ -385,7 +458,7 @@ describe('Check-in and checkout (e2e)', () => {
       .expect(409);
   });
 
-  it('serializes check-in against no-show at the end boundary', async () => {
+  it('closes check-in and opens no-show at the same deadline', async () => {
     now = new Date('2099-01-20T05:50:00.000Z'); // 12:50 ICT
     const created = await api()
       .post('/api/bookings')
@@ -398,17 +471,11 @@ describe('Check-in and checkout (e2e)', () => {
       })
       .expect(201);
     const bookingId = created.body.id as string;
-    const requested = await api()
-      .patch(`/api/bookings/mine/${bookingId}/check-in`)
-      .set('Cookie', studentCookie)
-      .expect(200);
-
-    now = new Date('2099-01-20T07:00:00.000Z'); // 14:00 ICT
+    now = new Date('2099-01-20T06:15:00.000Z'); // 13:15 ICT, the deadline
     const responses = await Promise.all([
       api()
         .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
-        .set('Cookie', staffCookie)
-        .send({ code: requested.body.checkInCode }),
+        .set('Cookie', staffCookie),
       api()
         .patch(`/api/staff/bookings/${bookingId}/no-show`)
         .set('Cookie', staffCookie),
@@ -424,7 +491,229 @@ describe('Check-in and checkout (e2e)', () => {
     expect(persisted).toEqual({ status: 'no_show', check_in_code: null });
   });
 
+  it('releases a confirmed booking nobody checked in within 15 minutes of its start', async () => {
+    const release = () => app.get(BookingsService).releaseMissedDeadlines();
+    now = new Date('2099-01-20T07:50:00.000Z'); // 14:50 ICT
+    const missed = await api()
+      .post('/api/bookings')
+      .set('Cookie', studentCookie)
+      .send({
+        resourceId,
+        date: '2099-01-20',
+        startTime: '15:00',
+        endTime: '17:00',
+      })
+      .expect(201);
+    const missedId = missed.body.id as string;
+    expect(missed.body).toMatchObject({ status: 'confirmed' });
+    const missedView = await api()
+      .get(`/api/bookings/mine/${missedId}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(missedView.body).toMatchObject({
+      checkInDeadline: '2099-01-20T08:15:00.000Z',
+      releasedAutomatically: false,
+      canRequestCheckIn: false,
+    });
+
+    const attended = await api()
+      .post('/api/bookings')
+      .set('Cookie', studentCookie)
+      .send({
+        resourceId,
+        date: '2099-01-20',
+        startTime: '17:00',
+        endTime: '18:00',
+      })
+      .expect(201);
+    const attendedId = attended.body.id as string;
+
+    now = new Date('2099-01-20T08:14:59.000Z'); // 15:14:59 ICT
+    await release();
+    const [stillConfirmed] = await dataSource.query<{ status: string }[]>(
+      'SELECT status FROM bookings WHERE id = $1',
+      [missedId],
+    );
+    expect(stillConfirmed.status).toBe('confirmed');
+
+    // A confirmed booking cannot be checked in once the deadline passes.
+    now = new Date('2099-01-20T08:15:00.000Z'); // 15:15 ICT
+    await api()
+      .patch(`/api/staff/bookings/${missedId}/confirm-check-in`)
+      .set('Cookie', staffCookie)
+      .expect(409);
+    expect((await release()).released).toBeGreaterThanOrEqual(1);
+    expect((await release()).released).toBe(0);
+
+    const [released] = await dataSource.query<
+      {
+        status: string;
+        check_in_code: string | null;
+        no_show_at: Date | null;
+        no_show_by_id: string | null;
+      }[]
+    >(
+      'SELECT status, check_in_code, no_show_at, no_show_by_id FROM bookings WHERE id = $1',
+      [missedId],
+    );
+    expect(released).toEqual({
+      status: 'no_show',
+      check_in_code: null,
+      no_show_at: now,
+      no_show_by_id: null,
+    });
+    const studentView = await api()
+      .get(`/api/bookings/mine/${missedId}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(studentView.body).toMatchObject({
+      status: 'no_show',
+      releasedAutomatically: true,
+    });
+    expect(studentView.body).toHaveProperty('checkInCode', null);
+    const staffView = await api()
+      .get(`/api/staff/bookings/${missedId}`)
+      .set('Cookie', staffCookie)
+      .expect(200);
+    expect(staffView.body).toMatchObject({
+      status: 'no_show',
+      releasedAutomatically: true,
+      canMarkNoShow: false,
+    });
+
+    // The rest of the released slot is bookable again.
+    const rebooked = await api()
+      .post('/api/bookings')
+      .set('Cookie', studentCookie)
+      .send({
+        resourceId,
+        date: '2099-01-20',
+        startTime: '16:00',
+        endTime: '17:00',
+      })
+      .expect(201);
+
+    // A booking staff checked in before its deadline is never released.
+    now = new Date('2099-01-20T09:55:00.000Z'); // 16:55 ICT
+    now = new Date('2099-01-20T10:14:00.000Z'); // 17:14 ICT
+    await api()
+      .patch(`/api/staff/bookings/${attendedId}/confirm-check-in`)
+      .set('Cookie', staffCookie)
+      .expect(200);
+    now = new Date('2099-01-20T10:30:00.000Z'); // 17:30 ICT
+    await release();
+    const statuses = await dataSource.query<{ id: string; status: string }[]>(
+      'SELECT id, status FROM bookings WHERE id = ANY($1)',
+      [[attendedId, rebooked.body.id]],
+    );
+    expect(
+      Object.fromEntries(statuses.map((row) => [row.id, row.status])),
+    ).toEqual({
+      [attendedId]: 'checked_in',
+      [rebooked.body.id as string]: 'no_show',
+    });
+  });
+
+  it('expires a request nobody reviewed by its check-in deadline and frees the slot', async () => {
+    const release = () => app.get(BookingsService).releaseMissedDeadlines();
+    now = new Date('2099-01-22T05:50:00.000Z'); // 12:50 ICT
+    const [pending] = await dataSource.query<{ id: string }[]>(
+      `INSERT INTO bookings (
+        resource_id, requester_id, booking_date, start_time, end_time, status
+      ) VALUES ($1, $2, '2099-01-22', '13:00', '15:00', 'pending')
+      RETURNING id`,
+      [resourceId, studentId],
+    );
+
+    now = new Date('2099-01-22T06:14:59.000Z'); // 13:14:59 ICT
+    expect((await release()).expired).toBe(0);
+    const reviewable = await api()
+      .get(`/api/staff/bookings/${pending.id}`)
+      .set('Cookie', staffCookie)
+      .expect(200);
+    expect(reviewable.body).toMatchObject({
+      status: 'pending',
+      canReview: true,
+    });
+
+    // A late approval would create a booking nobody can check in any more.
+    now = new Date('2099-01-22T06:15:00.000Z'); // 13:15 ICT
+    const late = await api()
+      .patch(`/api/staff/bookings/${pending.id}/approve`)
+      .set('Cookie', staffCookie)
+      .expect(409);
+    expect(late.body.code).toBe('BOOKING_REVIEW_WINDOW_ENDED');
+
+    expect((await release()).expired).toBeGreaterThanOrEqual(1);
+    expect((await release()).expired).toBe(0);
+    const [expired] = await dataSource.query<
+      { status: string; reviewed_at: Date | null }[]
+    >('SELECT status, reviewed_at FROM bookings WHERE id = $1', [pending.id]);
+    expect(expired).toEqual({ status: 'expired', reviewed_at: null });
+
+    const studentView = await api()
+      .get(`/api/bookings/mine/${pending.id}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(studentView.body).toMatchObject({
+      status: 'expired',
+      canCancel: false,
+      canRequestCheckIn: false,
+      releasedAutomatically: false,
+    });
+    const timeline = await api()
+      .get('/api/bookings/mine')
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(
+      timeline.body.history.map((booking: { id: string }) => booking.id),
+    ).toContain(pending.id);
+    await api()
+      .patch(`/api/staff/bookings/${pending.id}/reject`)
+      .set('Cookie', staffCookie)
+      .send({ reason: 'Too late to review.' })
+      .expect(409);
+
+    // The remaining whole hour is bookable again.
+    await api()
+      .post('/api/bookings')
+      .set('Cookie', studentCookie)
+      .send({
+        resourceId,
+        date: '2099-01-22',
+        startTime: '14:00',
+        endTime: '15:00',
+      })
+      .expect(201);
+  });
+
   it('enforces lifecycle shape and chronology directly in PostgreSQL', async () => {
+    await expect(
+      dataSource.query(
+        `INSERT INTO bookings (
+          resource_id, requester_id, booking_date, start_time, end_time, status,
+          checked_in_at, checked_in_by_id
+        ) VALUES ($1, $2, '2099-01-21', '11:00', '12:00', 'checked_in',
+          '2099-01-21T03:44:59.000Z', $3)`,
+        [resourceId, studentId, staffId],
+      ),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint: 'CHK_bookings_check_in_timeline',
+    });
+    await expect(
+      dataSource.query(
+        `INSERT INTO bookings (
+          resource_id, requester_id, booking_date, start_time, end_time, status,
+          checked_in_at
+        ) VALUES ($1, $2, '2099-01-21', '11:00', '12:00', 'checked_in',
+          '2099-01-21T03:45:00.000Z')`,
+        [resourceId, studentId],
+      ),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint: 'CHK_bookings_checked_in_state',
+    });
     await expect(
       dataSource.query(
         `INSERT INTO bookings (
@@ -441,9 +730,9 @@ describe('Check-in and checkout (e2e)', () => {
       dataSource.query(
         `INSERT INTO bookings (
           resource_id, requester_id, booking_date, start_time, end_time, status,
-          check_in_code, check_in_requested_at
+          check_in_requested_at
         ) VALUES ($1, $2, '2099-01-22', '09:00', '10:00', 'confirmed',
-          '123456', '2099-01-22T01:30:00.000Z')`,
+          '2099-01-22T01:30:00.000Z')`,
         [resourceId, studentId],
       ),
     ).rejects.toMatchObject({
@@ -473,12 +762,35 @@ describe('Check-in and checkout (e2e)', () => {
           resource_id, requester_id, booking_date, start_time, end_time, status,
           no_show_at, no_show_by_id
         ) VALUES ($1, $2, '2099-01-24', '09:00', '10:00', 'no_show',
-          '2099-01-24T02:59:59.000Z', $3)`,
+          '2099-01-24T02:14:59.000Z', $3)`,
         [resourceId, studentId, studentId],
       ),
     ).rejects.toMatchObject({
       code: '23514',
       constraint: 'CHK_bookings_no_show_timeline',
+    });
+
+    const [released] = await dataSource.query<{ id: string }[]>(
+      `INSERT INTO bookings (
+        resource_id, requester_id, booking_date, start_time, end_time, status,
+        no_show_at, no_show_by_id
+      ) VALUES ($1, $2, '2099-01-24', '09:00', '10:00', 'no_show',
+        '2099-01-24T02:15:00.000Z', NULL)
+      RETURNING id`,
+      [resourceId, studentId],
+    );
+    await dataSource.query('DELETE FROM bookings WHERE id = $1', [released.id]);
+    await expect(
+      dataSource.query(
+        `INSERT INTO bookings (
+          resource_id, requester_id, booking_date, start_time, end_time, status,
+          no_show_by_id
+        ) VALUES ($1, $2, '2099-01-24', '09:00', '10:00', 'confirmed', $3)`,
+        [resourceId, studentId, studentId],
+      ),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint: 'CHK_bookings_no_show_state',
     });
   });
 });

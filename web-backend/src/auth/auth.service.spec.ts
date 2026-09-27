@@ -92,6 +92,38 @@ describe('AuthService', () => {
     });
   });
 
+  describe('createStaffAccount', () => {
+    const details = {
+      email: 'lan.pham@usth.edu.vn',
+      password: 'password123',
+      fullName: 'Lan Pham',
+    };
+
+    it('creates a hashed staff account without starting a session', async () => {
+      const staff = buildUser({ role: UserRole.STAFF });
+      usersService.create.mockResolvedValue(staff);
+
+      await expect(authService.createStaffAccount(details)).resolves.toBe(
+        staff,
+      );
+      expect(usersService.create).toHaveBeenCalledWith({
+        email: 'lan.pham@usth.edu.vn',
+        passwordHash: '$2b$12$hash',
+        fullName: 'Lan Pham',
+        role: UserRole.STAFF,
+      });
+      expect(tokenService.signAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('maps a duplicate email to 409', async () => {
+      usersService.create.mockRejectedValue(new EmailAlreadyExistsError());
+
+      await expect(
+        authService.createStaffAccount(details),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
   describe('login', () => {
     it('returns the user and a signed token on valid credentials', async () => {
       const user = buildUser();

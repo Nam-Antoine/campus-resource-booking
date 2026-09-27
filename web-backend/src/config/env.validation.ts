@@ -87,6 +87,13 @@ export const envValidationSchema = Joi.object({
   THROTTLE_TTL: Joi.number().integer().positive().default(60),
   THROTTLE_LIMIT: Joi.number().integer().positive().default(100),
   AUTH_THROTTLE_LIMIT: Joi.number().integer().positive().default(10),
+
+  // 0 disables the missed check-in release job.
+  BOOKING_RELEASE_INTERVAL_SECONDS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3600)
+    .default(60),
   // Optional startup accounts. Empty (as an unset Compose passthrough renders
   // it) means unset.
   BOOTSTRAP_ADMIN_EMAIL: bootstrapEmail('BOOTSTRAP_ADMIN_EMAIL'),

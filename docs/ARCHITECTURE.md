@@ -102,6 +102,9 @@ sequenceDiagram
   from `BOOTSTRAP_*` variables and are provisioned at backend startup by
   `AccountBootstrapService`. Existing accounts are never modified — with one
   deliberate exception: the named admin is restored if no active admin remains.
+- Later staff accounts are created by an admin (`POST /admin/users`) with an
+  initial password. There is no endpoint that changes a role: an account keeps
+  the role it was created with.
 - Only exact `@usth.edu.vn` addresses pass the auth DTOs.
 - `password_hash` is `select: false`; it is read only to verify a password.
 - A wrong password and an unknown email return the same status and the same body.
@@ -157,7 +160,7 @@ What the server refuses, and with which code:
 | `BOOKING_OVERLAP`                                                                   | 409  | Another active booking covers the slot                           |
 | `BOOKING_NOT_PENDING`, `BOOKING_REVIEW_WINDOW_ENDED`                              | 409  | No longer reviewable                                             |
 | `BOOKING_NOT_CANCELLABLE`                                                           | 409  | Outside the cancellation window                                  |
-| `CHECK_IN_NOT_AVAILABLE`, `CHECK_IN_ALREADY_REQUESTED`, `INVALID_CHECK_IN_CODE` | 409  | Check-in preconditions unmet                                     |
+| `CHECK_IN_NOT_AVAILABLE`                                                         | 409  | Booking is not confirmed or is outside the staff check-in window |
 | `BOOKING_NOT_CHECKED_IN`, `NO_SHOW_NOT_AVAILABLE`                                 | 409  | Checkout or no-show preconditions unmet                          |
 
 Each is a typed `BookingDomainError` raised in `bookings.service.ts` and mapped
@@ -180,9 +183,10 @@ stateDiagram-v2
     pending --> confirmed: staff approve
     pending --> rejected: staff reject with reason
     pending --> cancelled: student cancel
+    pending --> expired: not reviewed 15 min after start
 
-    confirmed --> checked_in: staff verify six-digit code
-    confirmed --> no_show: staff mark, after the slot ended
+    confirmed --> checked_in: staff match confirmation and record arrival
+    confirmed --> no_show: not checked in 15 min after start
     confirmed --> cancelled: student cancel while eligible
 
     checked_in --> completed: staff check out
@@ -191,10 +195,11 @@ stateDiagram-v2
     cancelled --> [*]
     completed --> [*]
     no_show --> [*]
+    expired --> [*]
 
     note right of confirmed
-        The student requests a check-in code here.
-        Status stays confirmed until staff verify it.
+        The student sees booking confirmation in their account.
+        Status stays confirmed until staff record arrival.
     end note
 ```
 
@@ -208,7 +213,7 @@ out, or flagged a no-show, and when.
 
 ## 5. Flow 4 — Check-in and check-out
 
-Check-in is deliberately two-sided: neither party can complete it alone.
+Students show the confirmed booking in their signed-in account. Staff compare its full booking reference, student, resource and time with the live staff record before recording arrival. The student cannot mark themselves checked in; a screenshot alone is not proof of a current booking.
 
 ```mermaid
 sequenceDiagram
@@ -217,22 +222,31 @@ sequenceDiagram
     participant API as API
     participant T as Staff
 
-    S->>API: PATCH /bookings/mine/:id/check-in
-    API->>API: generate six-digit code, store with timestamp
-    API-->>S: code on screen, status still confirmed
-    S->>T: reads the code out at the door
-    T->>API: PATCH /staff/bookings/:id/confirm-check-in with the code
-    alt the code matches
-        API-->>T: status checked_in
-    else wrong code
-        API-->>T: 409 INVALID_CHECK_IN_CODE
+    S->>API: GET /bookings/mine/:id
+    API-->>S: confirmed booking details in account
+    S->>T: shows booking confirmation at the door
+    T->>API: GET /staff/bookings/:id; compare identity, reference, resource, time
+    T->>API: PATCH /staff/bookings/:id/confirm-check-in
+    alt booking still confirmed and inside check-in window
+        API-->>T: status checked_in; staff actor/time recorded
+    else booking no longer eligible
+        API-->>T: 409 CHECK_IN_NOT_AVAILABLE
     end
     T->>API: PATCH /staff/bookings/:id/check-out
     API-->>T: status completed
 ```
 
-If the slot ends and nobody ever checked in, staff mark it `no_show` — which is
-why that transition is only legal *after* the end time.
+Check-in closes 15 minutes after the start, and so does the review window for
+a pending request. At that deadline `BookingReleaseScheduler` frees the slot of
+anything not used: it runs `releaseMissedDeadlines()` every
+`BOOKING_RELEASE_INTERVAL_SECONDS` (60 by default), which marks a confirmed
+booking staff have not checked in as `no_show` with no staff actor, and a
+request nobody reviewed as `expired`. Any remaining whole hours of the slot can
+then be booked again. Showing the confirmation without staff recording arrival does
+not keep the booking. Staff can record the no-show themselves from the same
+deadline. The release is one idempotent `UPDATE`, so several API processes
+running it is harmless. Analytics leaves released bookings out of popular
+resources and peak hours, because their hours can be booked a second time.
 
 ---
 
@@ -273,7 +287,8 @@ sequenceDiagram
 | Deactivation       | `UserAccessEvents.deactivated$` drops every socket in that user's room                 |
 
 Emitted by every booking write (create, approve, reject, confirm check-in, check
-out, no-show, cancel) and every resource change (edit, status, closure). Pushes
+out, no-show, cancel), by the missed check-in release, and by every resource
+change (edit, status, closure). Pushes
 reach assistive technology through `dashboard-live-region` and
 `availability-live-region`, so availability never moves silently.
 
@@ -310,13 +325,14 @@ flowchart LR
     subgraph attend["The slot arrives"]
         confirmed["confirmed"]
         arrive{"Student turns up?"}
-        verify["Six-digit code,<br/>verified by staff"]
+        verify["Booking and identity<br/>matched by staff"]
         checkedin["checked_in"]
         out["Staff checks out"]
     end
 
-    subgraph done["It ends one of four ways"]
+    subgraph done["It ends one of five ways"]
         rejected(["rejected"])
+        expired(["expired"])
         cancelled(["cancelled"])
         noshow(["no_show"])
         completed(["completed"])
@@ -332,10 +348,11 @@ flowchart LR
     needs -->|"no, a room"| confirmed
     review -->|approve| confirmed
     review -->|"reject with a reason"| rejected
+    review -->|"nobody decides by start + 15 min"| expired
 
     confirmed --> arrive
     arrive -->|"cancels first"| cancelled
-    arrive -->|"no, slot ends"| noshow
+    arrive -->|"not checked in 15 min after start"| noshow
     arrive -->|yes| verify --> checkedin --> out --> completed
 
     pending -.-> push
@@ -351,7 +368,7 @@ flowchart LR
     classDef live fill:#3d51b5,stroke:#1d2a68,color:#fff
     class signin,adm,find,submit,queue,verify,out,ana act
     class pending,confirmed,checkedin st
-    class rejected,cancelled,noshow,completed fin
+    class rejected,expired,cancelled,noshow,completed fin
     class push,clash live
     classDef phase fill:#f7f8fc,stroke:#c9cfe8,color:#1d2a68
     class setup,ask,decide,attend,done phase
@@ -359,7 +376,7 @@ flowchart LR
 
 Reading it against the rest of this document: signing in is §2, *Find a
 resource* through to `pending` or `confirmed` is §3, the staff panel is §4, the
-code and the checkout are §5, and the dotted arrows back to *Find* are §6.
+staff confirmation and checkout are §5, and the dotted arrows back to *Find* are §6.
 
 Dark boxes are actions, and each one is an HTTP call that went through the
 pipeline in the next section. Pale boxes are the `status` value on a row in
@@ -418,7 +435,7 @@ rejected before it can reach the database. The consequences worth preserving:
 ## 9. The data behind the flows
 
 Five tables. Migrations are the schema source of truth
-(`DB_SYNCHRONIZE=false`); there are 13 of them today.
+(`DB_SYNCHRONIZE=false`); apply them in timestamp order.
 
 ```mermaid
 erDiagram
@@ -473,12 +490,12 @@ erDiagram
         date booking_date
         time start_time "whole hour"
         time end_time "whole hour, at or before 23:00"
-        enum status "seven states"
+        enum status "eight states"
         tsrange booking_period "generated, stored"
         timestamptz reviewed_at
         uuid reviewed_by_id FK
         text rejection_reason
-        varchar check_in_code "six digits"
+        varchar check_in_code "legacy, must be null"
         timestamptz checked_in_at
         uuid checked_in_by_id FK
         timestamptz checked_out_at
@@ -499,8 +516,7 @@ code alone:
 - **Status and columns cannot disagree.** About a dozen `CHECK` constraints: a
   `rejected` row must carry `reviewed_at` and a non-empty reason; a
   `checked_in` row must carry `checked_in_at` and `checked_in_by_id`; a
-  `pending` row must be unreviewed; a check-in code must arrive with its
-  timestamp.
+  `pending` row must be unreviewed; new check-ins do not require a student-generated code or request timestamp.
 - **Schedules are sane by construction:** `start_time < end_time`, whole hours,
   `end_time <= 23:00`, operating days non-empty and within `1..7`.
 - **History cannot be orphaned.** Every foreign key on `bookings` is
@@ -630,18 +646,17 @@ Relative to `http://localhost:18320/api`. Swagger UI: `/api/docs`.
 | `GET`    | `/bookings/mine`                                 | student              | Upcoming and history                      |
 | `GET`    | `/bookings/mine/:id`                             | student              | One own booking                           |
 | `PATCH`  | `/bookings/mine/:id/cancel`                      | student              | Cancel while eligible                     |
-| `PATCH`  | `/bookings/mine/:id/check-in`                    | student              | Generate the six-digit code               |
 | `GET`    | `/staff/bookings/pending`                        | staff, admin         | Approval queue                            |
 | `GET`    | `/staff/bookings/operations`                     | staff, admin         | Today's operations board                  |
 | `GET`    | `/staff/bookings/resources/:resourceId/schedule` | staff, admin         | One resource's day                        |
 | `GET`    | `/staff/bookings/:id`                            | staff, admin         | Booking detail for review                 |
-| `PATCH`  | `/staff/bookings/:id/approve`                    | staff, admin         | Approve a pending request                 |
+| `PATCH`  | `/staff/bookings/:id/approve`                    | staff, admin         | Approve, until 15 min after the start     |
 | `PATCH`  | `/staff/bookings/:id/reject`                     | staff, admin         | Reject with a reason                      |
-| `PATCH`  | `/staff/bookings/:id/confirm-check-in`           | staff, admin         | Verify the code                           |
+| `PATCH`  | `/staff/bookings/:id/confirm-check-in`           | staff, admin         | Confirm arrival after matching booking    |
 | `PATCH`  | `/staff/bookings/:id/check-out`                  | staff, admin         | Complete a checked-in booking             |
-| `PATCH`  | `/staff/bookings/:id/no-show`                    | staff, admin         | Flag an ended unchecked booking           |
+| `PATCH`  | `/staff/bookings/:id/no-show`                    | staff, admin         | Flag a booking that missed check-in       |
 | `GET`    | `/admin/users`                                   | admin                | Search and list accounts                  |
-| `PATCH`  | `/admin/users/:id/role`                          | admin                | Assign a role                             |
+| `POST`   | `/admin/users`                                   | admin                | Create a staff account                    |
 | `PATCH`  | `/admin/users/:id/status`                        | admin                | Activate or deactivate                    |
 | `GET`    | `/admin/resources`                               | admin                | List for administration                   |
 | `GET`    | `/admin/resources/buildings`                     | admin                | Buildings available                       |
@@ -663,6 +678,7 @@ Swagger decorators are part of the definition of done for any endpoint change.
 | Database         | `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME`, `DB_SYNCHRONIZE`, `DB_LOGGING`                                                                |
 | Auth             | `AUTH_JWT_SECRET` (32+ characters, required), `AUTH_TOKEN_EXPIRES_IN`, `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE`, `AUTH_COOKIE_SECURE`, `AUTH_BCRYPT_ROUNDS` |
 | Rate limits      | `THROTTLE_TTL`, `THROTTLE_LIMIT`, `AUTH_THROTTLE_LIMIT`                                                                                                              |
+| Bookings         | `BOOKING_RELEASE_INTERVAL_SECONDS` (60; 0 turns off the missed check-in release)                                                                                    |
 | Startup accounts | `BOOTSTRAP_ADMIN_*`, `BOOTSTRAP_STAFF_*`                                                                                                                               |
 | Runtime          | `NODE_ENV`, `API_PREFIX`, `DOCKER_SUBNET`                                                                                                                            |
 

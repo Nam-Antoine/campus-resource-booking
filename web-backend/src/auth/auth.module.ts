@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthConfig, authConfig } from '../config';
 import { UsersModule } from '../users/users.module';
 import { AccountBootstrapService } from './account-bootstrap.service';
+import { AdminStaffAccountsController } from './admin-staff-accounts.controller';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthCookieService } from './services/auth-cookie.service';
@@ -25,7 +26,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AdminStaffAccountsController],
   providers: [
     AccountBootstrapService,
     AuthService,

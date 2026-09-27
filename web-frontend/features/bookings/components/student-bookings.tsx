@@ -17,9 +17,11 @@ import {
 } from "@/components/icons";
 import { LogoutButton } from "@/features/auth/components/logout-button";
 import type { User } from "@/features/auth/types";
-import { BookingRequestError, cancelStudentBooking, requestStudentCheckIn } from "../api/browser";
+import { BookingRequestError, cancelStudentBooking } from "../api/browser";
 import {
+  campusClockTime,
   isExpiredRequest,
+  isReviewWindowClosed,
   studentDisplayStatus,
   studentStatusLabel,
 } from "../status";
@@ -53,6 +55,10 @@ function dateParts(date: string): { day: string; month: string; full: string } {
   };
 }
 
+function isCheckInWindowClosed(booking: StudentBooking): boolean {
+  return booking.status === "confirmed" && Date.now() >= new Date(booking.checkInDeadline).getTime();
+}
+
 function BookingRow({ booking }: { booking: StudentBooking }) {
   const date = dateParts(booking.date);
   return (
@@ -69,11 +75,11 @@ function BookingRow({ booking }: { booking: StudentBooking }) {
           {studentStatusLabel(booking)}
         </span>
         <h3>{booking.resource.name}</h3>
-        {isExpiredRequest(booking) && (
-          <p className={styles.expiredNote}>
-            Not reviewed before its scheduled time ended. No booking was made.
-          </p>
-        )}
+        {isExpiredRequest(booking) ? (
+          <p className={styles.expiredNote}>Not reviewed before the check-in deadline. The request expired and its slot was released.</p>
+        ) : isReviewWindowClosed(booking) ? (
+          <p className={styles.expiredNote}>The review deadline passed. This request is still pending release; its slot may remain held until the system updates it.</p>
+        ) : null}
         <p>
           <ClockIcon /> {booking.startTime}–{booking.endTime} ICT
           <span aria-hidden="true">·</span>
@@ -94,7 +100,7 @@ interface StudentBookingsProps {
 
 export function StudentBookings({ user, timeline }: StudentBookingsProps) {
   const pending = timeline.upcoming.filter(
-    (booking) => booking.status === "pending",
+    (booking) => booking.status === "pending" && !isReviewWindowClosed(booking),
   );
   const confirmed = timeline.upcoming.filter(
     (booking) => booking.status === "confirmed",
@@ -210,7 +216,6 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
   const [booking, setBooking] = useState(initialBooking);
   const [confirming, setConfirming] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState<BookingRequestError["code"] | null>(
     null,
@@ -232,28 +237,6 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
   function keepBooking() {
     setConfirming(false);
     requestAnimationFrame(() => cancelButtonRef.current?.focus());
-  }
-
-  async function requestCheckIn() {
-    if (isCheckingIn) return;
-    setIsCheckingIn(true);
-    setError("");
-    setErrorCode(null);
-    try {
-      setBooking(await requestStudentCheckIn(booking.id));
-      requestAnimationFrame(() => actionHeadingRef.current?.focus());
-    } catch (caught) {
-      setError(
-        caught instanceof BookingRequestError
-          ? caught.message
-          : "A check-in code could not be generated. Try again.",
-      );
-      setErrorCode(
-        caught instanceof BookingRequestError ? caught.code : "unexpected",
-      );
-    } finally {
-      setIsCheckingIn(false);
-    }
   }
 
   async function cancel() {
@@ -306,6 +289,21 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
           <time dateTime={booking.date}><strong>{date.day}</strong><span>{date.month}</span></time>
         </section>
 
+        {booking.status === "confirmed" && !booking.hasEnded && !isCheckInWindowClosed(booking) && (
+          <section className={styles.confirmation} aria-labelledby="confirmation-title">
+            <h3 id="confirmation-title">Booking confirmation</h3>
+            <p>Show this confirmation on your account to campus staff. Staff must match your identity, booking ID, resource and scheduled time in their system before confirming arrival.</p>
+            <dl>
+              <div><dt>Student</dt><dd>{user.fullName}</dd></div>
+              <div><dt>University email</dt><dd>{user.email}</dd></div>
+              <div><dt>Booking ID</dt><dd>{booking.id}</dd></div>
+              <div><dt>Resource</dt><dd>{booking.resource.code} · {booking.resource.name}</dd></div>
+              <div><dt>Building and location</dt><dd>{booking.resource.buildingCode} · {booking.resource.buildingName} · {booking.resource.location}</dd></div>
+              <div><dt>Date and time</dt><dd>{date.full} · {booking.startTime}–{booking.endTime} ICT (UTC+7)</dd></div>
+            </dl>
+            <small>Only a currently confirmed booking is valid. If this page has been open for a while, ask staff to verify its current status in their system.</small>
+          </section>
+        )}
         <div className={styles.detailGrid}>
           <section className={styles.detailPanel} aria-labelledby="schedule-title">
             <div className={styles.detailHeading}><ClockIcon /><div><p>Booking schedule</p><h2 id="schedule-title">{date.full}</h2></div></div>
@@ -322,75 +320,61 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
           <aside className={styles.actionPanel} aria-labelledby="action-title">
             <ShieldCheckIcon />
             <h2 ref={actionHeadingRef} tabIndex={-1} id="action-title">
-              {booking.hasEnded &&
-              (booking.status === "pending" ||
-                booking.status === "confirmed" ||
-                booking.status === "checked_in")
-                ? booking.status === "pending"
-                  ? "Request expired without review"
-                  : booking.status === "confirmed"
-                    ? "Booking time ended"
-                    : "Booking time ended while checked in"
+              {booking.status === "expired"
+                ? "Request expired without review"
+                : isReviewWindowClosed(booking)
+                  ? "Review window ended"
+                : isCheckInWindowClosed(booking)
+                  ? "Check-in window ended"
+                : booking.hasEnded &&
+              (booking.status === "confirmed" || booking.status === "checked_in")
+                ? booking.status === "confirmed"
+                  ? "Booking time ended"
+                  : "Booking time ended while checked in"
                 : booking.status === "pending"
                 ? "Waiting for staff approval"
                 : booking.status === "confirmed"
-                  ? booking.checkInCode
-                    ? "Show this code to campus staff"
-                    : booking.canRequestCheckIn
-                      ? "You can check in now"
-                      : "Your booking is confirmed"
+                  ? "Show your booking confirmation to staff"
                   : booking.status === "checked_in"
                     ? "You are checked in"
                     : booking.status === "completed"
                       ? "Visit completed"
                       : booking.status === "no_show"
-                        ? "Recorded as no-show"
+                        ? booking.releasedAutomatically
+                          ? "Released: check-in was not confirmed in time"
+                          : "Recorded as no-show"
                         : booking.status === "rejected"
                           ? "This request was not approved"
                           : "This booking was cancelled"}
             </h2>
             <p>
-              {booking.hasEnded &&
-              (booking.status === "pending" ||
-                booking.status === "confirmed" ||
-                booking.status === "checked_in")
-                ? booking.status === "pending"
-                  ? "Campus staff did not review this request before its scheduled time ended, so it was never approved and no booking was made. Send a new request for another time if you still need the resource."
-                  : booking.status === "confirmed"
-                    ? "The scheduled time has ended. Campus staff can record a no-show if the resource was not used."
-                    : "The scheduled time has ended, but checkout has not yet been recorded. Contact campus staff to complete the visit."
+              {booking.status === "expired"
+                ? "Campus staff did not review this request within 15 minutes of its start, so it was never approved and its time was released for others. Send a new request for another time if you still need the resource."
+                : isReviewWindowClosed(booking)
+                  ? "Staff can no longer approve this request. It is still pending release, so its slot may remain held until the system records it as expired. Refresh this page to check its status before trying another time."
+                : isCheckInWindowClosed(booking)
+                  ? "Staff can no longer check you in for this booking. It remains confirmed until the system records a no-show and releases its slot. Refresh for the latest status or contact campus staff."
+                : booking.hasEnded &&
+              (booking.status === "confirmed" || booking.status === "checked_in")
+                ? booking.status === "confirmed"
+                  ? "The scheduled time has ended without a confirmed check-in, so the booking will be recorded as a no-show."
+                  : "The scheduled time has ended, but checkout has not yet been recorded. Contact campus staff to complete the visit."
                 : booking.status === "pending"
-                ? "The interval is protected while staff review the request."
+                ? `The time is held for you while staff review the request. If nobody approves it by ${campusClockTime(booking.checkInDeadline)}, 15 minutes after the start, the request expires and the time is released.`
                 : booking.status === "confirmed"
-                  ? booking.checkInCode
-                    ? "Staff will enter this one-time code to confirm your arrival."
-                    : booking.canRequestCheckIn
-                      ? "Generate your one-time code and present it to staff at the resource."
-                      : "Check-in opens 15 minutes before the booking starts."
+                  ? `Show the booking confirmation on this page to campus staff at the resource. Staff must confirm your arrival by ${campusClockTime(booking.checkInDeadline)}, or the booking is released for others.`
                   : booking.status === "checked_in"
                     ? "Staff confirmed your arrival. Check out before leaving the resource."
                     : booking.status === "completed"
                       ? `Checked out ${booking.checkedOutAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(booking.checkedOutAt)) : ""}.`
                       : booking.status === "no_show"
-                        ? "Staff recorded that this booking was not used."
+                        ? booking.releasedAutomatically
+                          ? `Staff had not checked you in by ${campusClockTime(booking.checkInDeadline)}, 15 minutes after the start, so the booking was released. Any of its remaining whole hours can now be booked by others.`
+                          : "Staff recorded that this booking was not used."
                         : booking.status === "rejected"
                           ? booking.rejectionReason ?? "Staff could not approve this request."
                           : `Cancelled ${booking.cancelledAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(booking.cancelledAt)) : ""}. The interval is available for others again.`}
             </p>
-            {booking.status === "confirmed" &&
-              !booking.hasEnded &&
-              booking.checkInCode && (
-              <div className={styles.checkInCode} role="status" aria-label={`Check-in code ${booking.checkInCode}`}>
-                <span>Check-in code</span>
-                <strong>{booking.checkInCode}</strong>
-                <small>Use once · Do not share outside campus staff</small>
-              </div>
-            )}
-            {booking.canRequestCheckIn && !booking.checkInCode && (
-              <button className={styles.checkInButton} type="button" disabled={isCheckingIn} onClick={() => void requestCheckIn()}>
-                {isCheckingIn ? "Generating code…" : "Generate check-in code"}
-              </button>
-            )}
             {booking.canCancel && !confirming && (
               <button ref={cancelButtonRef} className={styles.cancelButton} type="button" onClick={() => setConfirming(true)}>Cancel booking</button>
             )}

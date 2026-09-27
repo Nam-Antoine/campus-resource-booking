@@ -66,6 +66,8 @@ const booking: StaffBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
+  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  releasedAutomatically: false,
   resource: {
     id: "20000000-0000-4000-8000-000000000001",
     code: "LAB-L201",
@@ -137,7 +139,7 @@ describe("staff approval workflow", () => {
       id: "40000000-0000-4000-8000-000000000002",
       status: "confirmed" as const,
       canReview: false,
-      checkInRequested: true,
+      checkInRequested: false,
       canConfirmCheckIn: true,
     };
     const activeVisit = {
@@ -172,9 +174,9 @@ describe("staff approval workflow", () => {
     const summary = screen.getByLabelText("Staff dashboard summary");
     expect(summary).toHaveTextContent("1Requests to review");
     expect(summary).toHaveTextContent("4Open visits to manage");
-    expect(summary).toHaveTextContent("1Codes ready to verify");
+    expect(summary).toHaveTextContent("1Arrivals to confirm");
     expect(summary).toHaveTextContent("1Active visits");
-    expect(screen.getAllByText("Ready for no-show review")).toHaveLength(2);
+    expect(screen.getAllByText("Check-in missed")).toHaveLength(2);
     expect(screen.getByText(/Overdue · 4 Jan · 09:00–11:00 ICT/)).toBeVisible();
   });
 
@@ -201,7 +203,7 @@ describe("staff approval workflow", () => {
     const summary = screen.getByLabelText("Staff dashboard summary");
     expect(summary).toHaveTextContent("42Requests to review");
     expect(summary).toHaveTextContent("21Open visits to manage");
-    expect(summary).toHaveTextContent("Codes ready on this page");
+    expect(summary).toHaveTextContent("Arrivals to confirm on this page");
     expect(summary).toHaveTextContent("Oldest request on this page");
     expect(screen.getByLabelText("42 pending requests")).toBeVisible();
     expect(screen.getByLabelText("Queue position 21")).toBeVisible();
@@ -272,12 +274,31 @@ describe("staff approval workflow", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Approve booking" }));
     expect(mockedApprove).toHaveBeenCalledWith(booking.id);
-    expect(await screen.findByText("The student has not generated a check-in code yet.")).toBeVisible();
+    expect(await screen.findByText(/Match the student.s confirmation against the full booking ID/)).toBeVisible();
     expect(screen.getAllByText("Confirmed")).toHaveLength(2);
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Confirm campus arrival" })).toHaveFocus(),
     );
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("shows an expired request as read-only", () => {
+    render(
+      <StaffBookingDetail
+        user={staff}
+        booking={{ ...booking, status: "expired", canReview: false }}
+        schedule={schedule}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Request expired" })).toBeVisible();
+    expect(screen.getByText("Expired request · not reviewed in time")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Approve booking" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/by staff/)).not.toBeInTheDocument();
+  });
+
+  it("tells staff the deadline for a pending decision", () => {
+    render(<StaffBookingDetail user={staff} booking={booking} schedule={schedule} />);
+    expect(screen.getByText(/Decide by 09:15; after that the request cannot be reviewed/)).toBeVisible();
   });
 
   it("shows elapsed pending requests as read-only", () => {
@@ -290,16 +311,18 @@ describe("staff approval workflow", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Review window ended" })).toBeVisible();
-    expect(screen.getByText("Expired request · not reviewed in time")).toBeVisible();
-    expect(screen.getByText("Expired request")).toBeVisible();
-    expect(
-      screen.getByText(/review window has closed and it can no longer be reviewed/),
-    ).toBeVisible();
-    expect(
-      screen.getByText("No active bookings remain for this resource on this date."),
-    ).toBeVisible();
+    expect(screen.getByText("Review window ended · awaiting release")).toBeVisible();
+    expect(screen.getByText("Review window ended", { selector: "span" })).toBeVisible();
+    expect(screen.getByText(/request is still pending until the release job updates it/)).toBeVisible();
+    expect(screen.getByText(/1 active interval/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Approve booking" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reject with reason" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a pending, closed-window booking on the resource schedule", () => {
+    render(<StaffBookingDetail user={staff} booking={{ ...booking, canReview: false }} schedule={{ ...schedule, bookings: [{ ...booking, canReview: false }] }} />);
+    expect(screen.getByText(/1 active interval/)).toBeVisible();
+    expect(screen.getByText("Review window ended · awaiting release")).toBeVisible();
   });
 
   it("focuses review conflicts and offers an authoritative refresh", async () => {
@@ -329,7 +352,7 @@ describe("staff approval workflow", () => {
       ...booking,
       status: "confirmed",
       canReview: false,
-      checkInRequested: true,
+      checkInRequested: false,
       canConfirmCheckIn: true,
     };
     const checkedIn: StaffBooking = {
@@ -347,10 +370,12 @@ describe("staff approval workflow", () => {
       checkedOutAt: "2026-09-16T02:00:00.000Z",
     });
     render(<StaffBookingDetail user={staff} booking={confirmed} schedule={{ ...schedule, bookings: [confirmed] }} />);
+    expect(screen.getByText(booking.id)).toBeVisible();
+    expect(screen.getByText(/Match the student.s confirmation against the full booking ID/)).toBeVisible();
 
-    await userEvent.type(screen.getByLabelText("Student check-in code"), "482193");
     await userEvent.click(screen.getByRole("button", { name: "Confirm check-in" }));
-    expect(mockedConfirmCheckIn).toHaveBeenCalledWith(booking.id, "482193");
+    expect(mockedConfirmCheckIn).toHaveBeenCalledWith(booking.id);
+    expect(screen.queryByLabelText("Student check-in code")).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Confirm check-out" })).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: "Confirm check-out" }));
@@ -358,12 +383,12 @@ describe("staff approval workflow", () => {
     expect(await screen.findByText("Visit completed")).toBeVisible();
   });
 
-  it("validates code input, focuses lifecycle errors, and offers recovery", async () => {
+  it("focuses lifecycle errors and offers recovery", async () => {
     const confirmed: StaffBooking = {
       ...booking,
       status: "confirmed",
       canReview: false,
-      checkInRequested: true,
+      checkInRequested: false,
       canConfirmCheckIn: true,
     };
     mockedConfirmCheckIn.mockRejectedValue(
@@ -383,16 +408,7 @@ describe("staff approval workflow", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Confirm check-in" }),
     );
-    let alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveFocus());
-    expect(alert).toHaveTextContent("six-digit code");
-    expect(mockedConfirmCheckIn).not.toHaveBeenCalled();
-
-    await userEvent.type(screen.getByLabelText("Student check-in code"), "482193");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Confirm check-in" }),
-    );
-    alert = await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveFocus());
     await userEvent.click(
       screen.getByRole("button", { name: "Refresh booking details" }),
@@ -421,6 +437,7 @@ describe("staff approval workflow", () => {
       />,
     );
 
+    expect(screen.getByText(/This booking remains confirmed until a no-show is recorded/)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Mark as no-show" }));
 
     expect(mockedNoShow).toHaveBeenCalledWith(booking.id);
@@ -431,6 +448,29 @@ describe("staff approval workflow", () => {
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "No-show by staff" })).toHaveFocus(),
     );
+  });
+
+  it("shows staff that a booking was released automatically", () => {
+    const released: StaffBooking = {
+      ...booking,
+      status: "no_show",
+      canReview: false,
+      reviewedAt: "2099-01-04T02:00:00.000Z",
+      reviewer: staff,
+      noShowAt: "2099-01-05T02:15:00.000Z",
+      releasedAutomatically: true,
+    };
+    render(
+      <StaffBookingDetail
+        user={staff}
+        booking={released}
+        schedule={{ ...schedule, bookings: [] }}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Released automatically" })).toBeVisible();
+    expect(screen.queryByText("No-show by staff")).not.toBeInTheDocument();
+    expect(screen.getByText("Released · not checked in by 09:15")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Mark as no-show" })).not.toBeInTheDocument();
   });
 
   it("requires and submits a rejection reason", async () => {

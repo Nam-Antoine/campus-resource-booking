@@ -84,12 +84,14 @@ Use this file to track feature completion. Plan implementation details separatel
 
 ### 8. Check-in and check-out
 
-- [x] Generate a booking check-in code
-- [x] Student check-in
-- [x] Staff check-in confirmation
+- [x] Show a confirmed booking in the student's account for staff to verify
+- [x] Staff match the booking ID, student, resource and time against the live record
+- [x] Staff confirm check-in without a code
 - [x] Staff check-out confirmation
 - [x] Track no-show and completed status
-- [x] Prevent invalid or repeated check-in
+- [x] Prevent out-of-window or repeated staff check-in
+- [x] Release a booking not checked in 15 minutes after its start
+- [x] Expire a request not reviewed 15 minutes after its start
 
 ### 9. Live dashboard data
 
@@ -104,7 +106,7 @@ Use this file to track feature completion. Plan implementation details separatel
 
 - [x] Admin user list
 - [x] Search users
-- [x] Assign staff and admin roles
+- [x] Create staff accounts (roles are fixed at creation)
 - [x] Activate or deactivate users
 - [x] Protect role-management actions
 

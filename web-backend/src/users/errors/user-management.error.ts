@@ -7,7 +7,7 @@ export class UserNotFoundError extends Error {
 
 export class SelfManagementNotAllowedError extends Error {
   constructor() {
-    super('Administrators cannot change their own role or access status');
+    super('Administrators cannot change their own access status');
     this.name = 'SelfManagementNotAllowedError';
   }
 }

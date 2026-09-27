@@ -112,38 +112,6 @@ export class BookingsController {
     }
   }
 
-  @Patch('mine/:id/check-in')
-  @ApiOperation({ summary: 'Generate the student check-in code' })
-  @ApiOkResponse({ type: StudentBookingResponseDto })
-  @ApiNotFoundResponse({ description: 'Booking not found' })
-  @ApiConflictResponse({
-    description: 'Check-in is unavailable or already requested',
-  })
-  async requestCheckIn(
-    @CurrentUser('id') requesterId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<StudentBookingResponseDto> {
-    try {
-      return this.studentResponse(
-        await this.bookingsService.requestCheckIn(requesterId, id),
-      );
-    } catch (error: unknown) {
-      if (error instanceof BookingDomainError) {
-        const body = { code: error.code, message: error.message };
-        if (error.code === 'BOOKING_NOT_FOUND') {
-          throw new NotFoundException(body);
-        }
-        if (
-          error.code === 'CHECK_IN_NOT_AVAILABLE' ||
-          error.code === 'CHECK_IN_ALREADY_REQUESTED'
-        ) {
-          throw new ConflictException(body);
-        }
-      }
-      throw error;
-    }
-  }
-
   @Post()
   @ApiOperation({ summary: 'Create a booking request' })
   @ApiCreatedResponse({ type: BookingResponseDto })
@@ -189,8 +157,8 @@ export class BookingsController {
     return StudentBookingResponseDto.fromEntity(
       booking,
       this.bookingsService.canCancel(booking, evaluatedAt),
-      this.bookingsService.canRequestCheckIn(booking, evaluatedAt),
       this.bookingsService.hasEnded(booking, evaluatedAt),
+      this.bookingsService.checkInDeadline(booking),
     );
   }
 }

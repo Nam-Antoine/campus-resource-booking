@@ -420,6 +420,9 @@ function serverEnv(
     DB_NAME: options.database,
     DB_SYNCHRONIZE: 'false',
     DB_LOGGING: 'false',
+    // The seeded history has past confirmed bookings; the release job would
+    // rewrite them mid-run and skew the measurements.
+    BOOKING_RELEASE_INTERVAL_SECONDS: '0',
     AUTH_JWT_SECRET: randomBytes(48).toString('base64'),
     AUTH_COOKIE_SECURE: 'true',
     AUTH_TOKEN_EXPIRES_IN: '4h',

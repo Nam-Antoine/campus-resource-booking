@@ -1,5 +1,4 @@
 import { ApiError, browserRequest } from "@/lib/api/browser-client";
-import type { UserRole } from "@/features/auth/types";
 import { parseAdminUser } from "../schema";
 import type { AdminUser } from "../types";
 
@@ -66,18 +65,83 @@ async function mutateUser(
   }
 }
 
-export function updateUserRole(
-  id: string,
-  role: UserRole,
-  request: typeof fetch = fetch,
-): Promise<AdminUser> {
-  return mutateUser(id, "role", { role }, (user) => user.role === role, request);
-}
-
 export function updateUserStatus(
   id: string,
   isActive: boolean,
   request: typeof fetch = fetch,
 ): Promise<AdminUser> {
   return mutateUser(id, "status", { isActive }, (user) => user.isActive === isActive, request);
+}
+
+export interface StaffAccountDetails {
+  fullName: string;
+  email: string;
+  password: string;
+}
+
+export type StaffAccountErrorCode =
+  | "validation"
+  | "duplicate"
+  | "session"
+  | "forbidden"
+  | "network"
+  | "unexpected";
+
+export class StaffAccountError extends Error {
+  constructor(
+    public readonly code: StaffAccountErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "StaffAccountError";
+  }
+}
+
+const staffAccountMessages: Record<StaffAccountErrorCode, string> = {
+  validation: "Check the name, the @usth.edu.vn email, and that the password has 8 to 72 characters.",
+  duplicate: "An account already exists for this USTH email. Find it in the directory instead.",
+  session: "Your session has ended. Sign in again to create staff accounts.",
+  forbidden: "Your account does not have permission to create staff accounts.",
+  network: "The user service is unreachable. Check your connection and try again.",
+  unexpected: "The staff account could not be created. Try again in a moment.",
+};
+
+function staffAccountCodeFor(error: ApiError): StaffAccountErrorCode {
+  if (error.kind === "network") return "network";
+  if (error.status === 400) return "validation";
+  if (error.status === 401) return "session";
+  if (error.status === 403) return "forbidden";
+  if (error.status === 409) return "duplicate";
+  return "unexpected";
+}
+
+export async function createStaffAccount(
+  details: StaffAccountDetails,
+  request: typeof fetch = fetch,
+): Promise<AdminUser> {
+  const email = details.email.trim().toLowerCase();
+  try {
+    const user = parseAdminUser(
+      await browserRequest(
+        "/admin/users",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email,
+            password: details.password,
+            fullName: details.fullName.trim(),
+          }),
+        },
+        request,
+      ),
+    );
+    if (!user || user.role !== "staff" || user.email !== email) {
+      throw new StaffAccountError("unexpected", "The user service returned invalid account data.");
+    }
+    return user;
+  } catch (error) {
+    if (error instanceof StaffAccountError) throw error;
+    const code = error instanceof ApiError ? staffAccountCodeFor(error) : "unexpected";
+    throw new StaffAccountError(code, staffAccountMessages[code]);
+  }
 }

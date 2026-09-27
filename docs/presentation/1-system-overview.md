@@ -9,10 +9,10 @@
 | Role | Who | In one sentence |
 | --- | --- | --- |
 | 🎓 **Student** | Anyone with an `@usth.edu.vn` email (self-registration) | Finds a free resource, books it, and checks in. |
-| 🧑‍💼 **Staff** | Created at first startup, or promoted by an admin | Approves or rejects requests and confirms check-in and check-out. |
-| 🛠️ **Admin** | Created at first startup, or promoted | Manages resources, closures and users, and reads the analytics. |
+| 🧑‍💼 **Staff** | Created at first startup, or by an admin | Approves or rejects requests and confirms check-in and check-out. |
+| 🛠️ **Admin** | Created at first startup, from `.env` | Manages resources, closures and users, and reads the analytics. |
 
-Registration always creates a **student**. Only an admin can promote someone to staff or admin. Admins also have access to everything staff can do.
+Registration always creates a **student**. Admins create staff accounts, and there is no way to change an account's role. The one exception is recovery: if no active admin is left, the admin account named in `.env` is made admin again at startup. Admins also have access to everything staff can do.
 
 ## Use cases
 
@@ -28,14 +28,14 @@ flowchart LR
         UC3([View live availability])
         UC4([Book a time slot])
         UC5([Cancel a booking])
-        UC6([Get a check-in code])
+        UC6([Show booking confirmation])
         UC7([View booking history])
         UC8([Approve or reject requests])
         UC9([Confirm check-in / check-out])
         UC10([Mark no-show])
         UC11([View a resource's schedule])
         UC12([Manage resources and closures])
-        UC13([Manage users and roles])
+        UC13([Create staff accounts, activate or deactivate users])
         UC14([View analytics])
     end
 
@@ -50,20 +50,20 @@ flowchart LR
 - **Search**: by keyword, building, type (room, laboratory, equipment), minimum capacity and amenity. Can also show only what is free at a chosen date and time.
 - **Availability grid**: the free hourly slots for a day. When someone else books a slot, it **disappears live**.
 - **Book** whole hours within opening hours, such as 09:00–11:00. The booking is confirmed at once, or goes to *pending* if the resource needs staff approval.
-- **My bookings**: upcoming bookings and history, with cancel (before the start, and before a check-in code is generated) and check-in.
-- **Check-in**: from 15 minutes before the start, the student gets a **6-digit code** to show staff.
+- **My bookings**: upcoming bookings and history, with cancellation while eligible and a confirmation for approved bookings.
+- **Check-in**: show the confirmed booking in your signed-in account to staff. Staff match its details with their live record and confirm arrival between 15 minutes before and 15 minutes after the start.
 
 ### 🧑‍💼 Staff
-- **Approval queue**: pending requests, oldest first, each approved or rejected with a reason.
-- **Operations list**: today's bookings, plus earlier visits still waiting for check-out or a no-show decision.
-- **Check-in**: enter the student's 6-digit code. **Check-out** when the student leaves.
-- **No-show**: for bookings that ended without a check-in.
+- **Approval queue**: pending requests, oldest first, each approved or rejected with a reason, until 15 minutes after the start.
+- **Operations list**: today's bookings, plus earlier visits still waiting for check-out.
+- **Check-in**: compare the student's confirmation and identity with the staff booking record, then confirm arrival in the system. **Check-out** when the student leaves.
+- **Automatic release**: a confirmed booking that staff have not checked in 15 minutes after its start becomes a no-show on its own, and any of its remaining whole hours can be booked again. Staff can also mark the no-show themselves from that moment.
 - **Resource schedule**: every booking on a resource for a chosen day.
 
 ### 🛠️ Admin
 - **Resources**: create and edit rooms, labs and equipment, including capacity, amenities, opening hours and days, and whether approval is needed. Set a resource to *active*, *maintenance* or *inactive*.
 - **Closures**: close a resource on specific dates, such as holidays or repairs.
-- **Users**: search accounts, assign roles, activate or deactivate. A deactivated user is logged out immediately.
+- **Users**: search accounts, create staff accounts with an initial password, activate or deactivate. Roles cannot be changed. A deactivated user is logged out immediately.
 - **Analytics** for a date range: total bookings, status breakdown, cancellation rate, most-booked resources, peak hours and utilization rate.
 
 ## A booking's life
@@ -75,19 +75,21 @@ stateDiagram-v2
     Pending --> Confirmed: staff approves
     Pending --> Rejected: staff rejects (with reason)
     Pending --> Cancelled: student cancels
-    Confirmed --> Cancelled: student cancels (before start, no code yet)
-    Confirmed --> CheckedIn: staff confirms 6-digit code
-    Confirmed --> NoShow: staff marks after it ended unused
+    Pending --> Expired: not reviewed 15 min after start (automatic)
+    Confirmed --> Cancelled: student cancels while eligible
+    Confirmed --> CheckedIn: staff matches confirmation and confirms arrival
+    Confirmed --> NoShow: not checked in 15 min after start (automatic)
     CheckedIn --> Completed: staff checks out
     Rejected --> [*]
     Cancelled --> [*]
     NoShow --> [*]
+    Expired --> [*]
     Completed --> [*]
 ```
 
-A pending request that nobody reviews before its time has passed is shown as **"Expired request"**.
+A pending request that nobody approves or rejects within 15 minutes of its start **expires**, and its time is released like a missed check-in.
 
-*Pending*, *confirmed* and *checked in* bookings **hold the slot**, so nobody else can book an overlapping time. Cancelled and rejected bookings free it again.
+*Pending*, *confirmed* and *checked in* bookings **hold the slot**, so nobody else can book an overlapping time. Cancelled, rejected, expired and released bookings free it again.
 
 ## Main flow: from search to check-in
 
@@ -113,10 +115,8 @@ sequenceDiagram
     API-->>T: Approved
     S->>API: Reload "My bookings"
     API-->>S: Status: Confirmed
-    S->>API: 15 min before start: request check-in code
-    API-->>S: Code 482913
-    S->>T: Shows the code at the room
-    T->>API: PATCH …/confirm-check-in {code}
+    S->>T: Shows booking confirmation in signed-in account
+    T->>API: Match booking details; PATCH …/confirm-check-in
     API-->>T: Checked in ✔
 ```
 

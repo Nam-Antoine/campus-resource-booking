@@ -7,6 +7,7 @@ import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
 import { EmailAlreadyExistsError } from '../users/errors/email-already-exists.error';
 import { UsersService } from '../users/users.service';
+import { CreateStaffAccountDto } from './dto/create-staff-account.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { PasswordService } from './services/password.service';
@@ -25,15 +26,26 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthenticatedSession> {
+    const user = await this.createAccount(dto, UserRole.STUDENT);
+    return this.createSession(user);
+  }
+
+  /** Staff accounts are created only by an administrator, never by sign-up. */
+  createStaffAccount(dto: CreateStaffAccountDto): Promise<User> {
+    return this.createAccount(dto, UserRole.STAFF);
+  }
+
+  private async createAccount(
+    dto: RegisterDto,
+    role: UserRole.STUDENT | UserRole.STAFF,
+  ): Promise<User> {
     try {
-      const user = await this.usersService.create({
+      return await this.usersService.create({
         email: dto.email,
         passwordHash: await this.passwordService.hash(dto.password),
         fullName: dto.fullName,
-        role: UserRole.STUDENT,
+        role,
       });
-
-      return this.createSession(user);
     } catch (error: unknown) {
       if (error instanceof EmailAlreadyExistsError) {
         throw new ConflictException(

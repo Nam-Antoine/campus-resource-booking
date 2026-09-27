@@ -5,7 +5,6 @@ import type { User } from "@/features/auth/types";
 import {
   BookingRequestError,
   cancelStudentBooking,
-  requestStudentCheckIn,
 } from "../api/browser";
 import type { StudentBooking, StudentBookingTimeline } from "../types";
 import { StudentBookingDetail, StudentBookings } from "./student-bookings";
@@ -14,7 +13,6 @@ const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("../api/browser", () => ({
   cancelStudentBooking: vi.fn(),
-  requestStudentCheckIn: vi.fn(),
   BookingRequestError: class BookingRequestError extends Error {
     constructor(
       public readonly code: string,
@@ -26,7 +24,6 @@ vi.mock("../api/browser", () => ({
 }));
 
 const mockedCancel = vi.mocked(cancelStudentBooking);
-const mockedCheckIn = vi.mocked(requestStudentCheckIn);
 const user: User = {
   id: "30000000-0000-4000-8000-000000000001",
   email: "student@usth.edu.vn",
@@ -49,6 +46,8 @@ const booking: StudentBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
+  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  releasedAutomatically: false,
   cancelledAt: null,
   reviewedAt: null,
   rejectionReason: null,
@@ -67,7 +66,6 @@ const booking: StudentBooking = {
 describe("student booking management", () => {
   beforeEach(() => {
     mockedCancel.mockReset();
-    mockedCheckIn.mockReset();
     refresh.mockReset();
   });
 
@@ -92,98 +90,55 @@ describe("student booking management", () => {
     expect(screen.getAllByRole("link", { name: /View details/ })).toHaveLength(3);
   });
 
-  it("generates and presents a student check-in code", async () => {
-    mockedCheckIn.mockResolvedValue({
-      ...booking,
-      canCancel: false,
-      canRequestCheckIn: false,
-      hasEnded: false,
-      checkInCode: "482193",
-      checkInRequestedAt: "2026-09-16T01:00:00.000Z",
-    });
+  it("shows a full confirmation only for an active confirmed booking", () => {
+    const view = render(<StudentBookingDetail user={user} booking={booking} />);
+    const confirmation = screen.getByRole("region", { name: "Booking confirmation" });
+    expect(confirmation).toHaveTextContent(user.fullName);
+    expect(confirmation).toHaveTextContent(user.email);
+    expect(confirmation).toHaveTextContent(booking.id);
+    expect(confirmation).toHaveTextContent("ROOM-A101 · Study Room A101");
+    expect(confirmation).toHaveTextContent("MAIN · Main Academic Building · First floor");
+    expect(confirmation).toHaveTextContent("09:00–11:00 ICT");
+    expect(confirmation).toHaveTextContent("current status in their system");
+    expect(screen.queryByRole("button", { name: /Generate check-in code/ })).not.toBeInTheDocument();
+    view.rerender(<StudentBookingDetail key="pending" user={user} booking={{ ...booking, status: "pending" }} />);
+    expect(screen.queryByRole("region", { name: "Booking confirmation" })).not.toBeInTheDocument();
+    view.rerender(<StudentBookingDetail key="ended" user={user} booking={{ ...booking, hasEnded: true, canCancel: false }} />);
+    expect(screen.queryByRole("region", { name: "Booking confirmation" })).not.toBeInTheDocument();
+  });
+
+  it("does not present a stale confirmed booking as valid after the check-in deadline", () => {
+    render(<StudentBookingDetail user={user} booking={{ ...booking, canCancel: false, checkInDeadline: "2020-01-01T00:00:00.000Z" }} />);
+    expect(screen.queryByRole("region", { name: "Booking confirmation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Check-in window ended" })).toBeVisible();
+    expect(screen.getByText(/remains confirmed until the system records a no-show/)).toBeVisible();
+  });
+
+  it("tells the student when staff check-in closes and that the booking is then released", () => {
+    render(<StudentBookingDetail user={user} booking={booking} />);
+    expect(screen.getByText(/must confirm your arrival by 09:15, or the booking is released for others/)).toBeVisible();
+  });
+
+  it("explains a booking released because check-in was missed", () => {
     render(
       <StudentBookingDetail
         user={user}
-        booking={{ ...booking, canCancel: false, canRequestCheckIn: true }}
+        booking={{
+          ...booking,
+          status: "no_show",
+          canCancel: false,
+          noShowAt: "2099-01-05T02:15:00.000Z",
+          releasedAutomatically: true,
+        }}
       />,
     );
-
-    await userEvent.click(screen.getByRole("button", { name: "Generate check-in code" }));
-    expect(mockedCheckIn).toHaveBeenCalledWith(booking.id);
-    expect(await screen.findByText("482193")).toBeVisible();
-    expect(screen.getByRole("status", { name: "Check-in code 482193" })).toBeVisible();
-    expect(refresh).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", {
-          name: "Show this code to campus staff",
-        }),
-      ).toHaveFocus(),
-    );
-  });
-
-  it.each([
-    [
-      "session" as const,
-      "Your session has ended. Sign in again before checking in.",
-      "Sign in again",
-    ],
-    [
-      "conflict" as const,
-      "Check-in is not available for this booking now. Refresh its details.",
-      "Refresh booking details",
-    ],
-  ])(
-    "focuses a %s check-in error and offers recovery",
-    async (code, message, recoveryName) => {
-      mockedCheckIn.mockRejectedValue(new BookingRequestError(code, message));
-      render(
-        <StudentBookingDetail
-          user={user}
-          booking={{ ...booking, canCancel: false, canRequestCheckIn: true }}
-        />,
-      );
-
-      await userEvent.click(
-        screen.getByRole("button", { name: "Generate check-in code" }),
-      );
-
-      const alert = await screen.findByRole("alert");
-      await waitFor(() => expect(alert).toHaveFocus());
-      if (code === "session") {
-        expect(screen.getByRole("link", { name: recoveryName })).toHaveAttribute(
-          "href",
-          `/login?next=%2Fbookings%2F${booking.id}`,
-        );
-      } else {
-        await userEvent.click(
-          screen.getByRole("button", { name: recoveryName }),
-        );
-        expect(refresh).toHaveBeenCalledOnce();
-      }
-    },
-  );
-
-  it("shows ended pending requests in history as expired requests", () => {
-    const expired = {
-      ...booking,
-      id: "40000000-0000-4000-8000-000000000004",
-      status: "pending" as const,
-      canCancel: false,
-      hasEnded: true,
-    };
-    render(
-      <StudentBookings user={user} timeline={{ upcoming: [], history: [expired] }} />,
-    );
-
-    expect(screen.getByText("Expired request")).toBeVisible();
-    expect(screen.queryByText("Pending approval")).not.toBeInTheDocument();
     expect(
-      screen.getByText("Not reviewed before its scheduled time ended. No booking was made."),
+      screen.getByRole("heading", { name: "Released: check-in was not confirmed in time" }),
     ).toBeVisible();
+    expect(screen.getByText(/had not checked you in by 09:15/)).toBeVisible();
   });
 
-  it("explains an expired request on its detail page", () => {
+  it("explains a passed review deadline without claiming a pending slot was released", () => {
     render(
       <StudentBookingDetail
         user={user}
@@ -191,14 +146,44 @@ describe("student booking management", () => {
       />,
     );
 
+    expect(screen.getAllByText("Review window ended")).toHaveLength(3);
+    expect(screen.getByText(/still pending release, so its slot may remain held/)).toBeVisible();
+    expect(screen.queryByText("Expired request")).not.toBeInTheDocument();
+  });
+
+  it("explains a request that expired at its check-in deadline", () => {
+    render(
+      <StudentBookingDetail
+        user={user}
+        booking={{ ...booking, status: "expired", canCancel: false }}
+      />,
+    );
     expect(screen.getAllByText("Expired request")).toHaveLength(2);
     expect(
       screen.getByRole("heading", { name: "Request expired without review" }),
     ).toBeVisible();
     expect(
-      screen.getByText(/did not review this request before its scheduled time ended/),
+      screen.getByText(/within 15 minutes of its start, so it was never approved and its time was released/),
     ).toBeVisible();
-    expect(screen.queryByText("Pending approval")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel booking" })).not.toBeInTheDocument();
+  });
+
+  it("tells the student when an unreviewed request will expire", () => {
+    render(
+      <StudentBookingDetail
+        user={user}
+        booking={{ ...booking, status: "pending" }}
+      />,
+    );
+    expect(
+      screen.getByText(/If nobody approves it by 09:15, 15 minutes after the start, the request expires/),
+    ).toBeVisible();
+  });
+
+  it("shows an unended pending request past the deadline as awaiting release", () => {
+    render(<StudentBookingDetail user={user} booking={{ ...booking, status: "pending", canCancel: false, checkInDeadline: "2020-01-01T00:00:00.000Z" }} />);
+    expect(screen.getAllByText("Review window ended")).toHaveLength(3);
+    expect(screen.getByText(/still pending release, so its slot may remain held/)).toBeVisible();
   });
 
   it("keeps an unended pending request labelled as pending approval", () => {
@@ -222,7 +207,7 @@ describe("student booking management", () => {
 
     expect(screen.getByText("Booking time ended")).toBeVisible();
     expect(
-      screen.getByText(/Campus staff can record a no-show/),
+      screen.getByText(/ended without a confirmed check-in, so the booking will be recorded as a no-show/),
     ).toBeVisible();
     expect(screen.queryByText(/Check-in opens/)).not.toBeInTheDocument();
     expect(
@@ -308,7 +293,7 @@ describe("student booking management", () => {
     const view = render(
       <StudentBookingDetail key="confirmed" user={user} booking={booking} />,
     );
-    expect(screen.getByText("Your booking is confirmed")).toBeVisible();
+    expect(screen.getByText("Show your booking confirmation to staff")).toBeVisible();
 
     view.rerender(
       <StudentBookingDetail

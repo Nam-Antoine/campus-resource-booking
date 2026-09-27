@@ -26,7 +26,6 @@ import {
   AdminUserPageDto,
   AdminUsersQueryDto,
 } from './dto/admin-users-query.dto';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UserRole } from './enums/user-role.enum';
 import {
@@ -54,25 +53,6 @@ export class AdminUsersController {
       ...page,
       items: page.items.map(AdminUserResponseDto.fromEntity),
     };
-  }
-
-  @Patch(':id/role')
-  @ApiOperation({ summary: 'Assign a user role' })
-  @ApiOkResponse({ type: AdminUserResponseDto })
-  @ApiBadRequestResponse({
-    description: 'Self-management or admin safety rule',
-  })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  async updateRole(
-    @CurrentUser('id') actorId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateUserRoleDto,
-  ): Promise<AdminUserResponseDto> {
-    return AdminUserResponseDto.fromEntity(
-      await this.translateErrors(() =>
-        this.usersService.updateRole(actorId, id, dto.role),
-      ),
-    );
   }
 
   @Patch(':id/status')

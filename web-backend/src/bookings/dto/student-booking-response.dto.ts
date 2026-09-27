@@ -66,11 +66,27 @@ export class StudentBookingResponseDto {
   @ApiProperty({ description: 'True once the scheduled interval has ended' })
   hasEnded: boolean;
 
-  @ApiProperty({ description: 'True while the student may generate a code' })
+  @ApiProperty({ description: 'Legacy capability; always false' })
   canRequestCheckIn: boolean;
 
-  @ApiPropertyOptional({ nullable: true, example: '482193' })
-  checkInCode: string | null;
+  @ApiProperty({
+    description:
+      'When check-in closes: 15 minutes after the start. A confirmed booking not checked in by staff by then is released.',
+  })
+  checkInDeadline: Date;
+
+  @ApiProperty({
+    description:
+      'True when the booking was released automatically because nobody checked in by the deadline',
+  })
+  releasedAutomatically: boolean;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Legacy code; always null',
+  })
+  checkInCode: null;
 
   @ApiPropertyOptional({ nullable: true })
   checkInRequestedAt: Date | null;
@@ -102,8 +118,8 @@ export class StudentBookingResponseDto {
   static fromEntity(
     booking: Booking,
     canCancel: boolean,
-    canRequestCheckIn: boolean,
     hasEnded: boolean,
+    checkInDeadline: Date,
   ): StudentBookingResponseDto {
     return {
       id: booking.id,
@@ -113,9 +129,11 @@ export class StudentBookingResponseDto {
       timeZone: CAMPUS_TIME_ZONE,
       status: booking.status,
       canCancel,
-      canRequestCheckIn,
+      canRequestCheckIn: false,
       hasEnded,
-      checkInCode: booking.checkInCode,
+      checkInDeadline,
+      releasedAutomatically: isReleasedAutomatically(booking),
+      checkInCode: null,
       checkInRequestedAt: booking.checkInRequestedAt,
       checkedInAt: booking.checkedInAt,
       checkedOutAt: booking.checkedOutAt,
@@ -135,4 +153,11 @@ export class StudentBookingListResponseDto {
 
   @ApiProperty({ type: StudentBookingResponseDto, isArray: true })
   history: StudentBookingResponseDto[];
+}
+
+/** A no-show recorded without a staff actor came from the release job. */
+export function isReleasedAutomatically(booking: Booking): boolean {
+  return (
+    booking.status === BookingStatus.NO_SHOW && booking.noShowById === null
+  );
 }

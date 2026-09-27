@@ -29,6 +29,8 @@ const booking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
+  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  releasedAutomatically: false,
   resource: {
     id: "20000000-0000-4000-8000-000000000001",
     code: "LAB-L201",

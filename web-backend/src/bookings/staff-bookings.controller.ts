@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -29,7 +30,6 @@ import {
 import { ResourceAvailabilityQueryDto } from '../resources/dto/resource-availability-query.dto';
 import { UserRole } from '../users/enums/user-role.enum';
 import { BookingsService } from './bookings.service';
-import { ConfirmCheckInDto } from './dto/confirm-check-in.dto';
 import { RejectBookingDto } from './dto/reject-booking.dto';
 import {
   StaffBookingQueueResponseDto,
@@ -163,21 +163,24 @@ export class StaffBookingsController {
   }
 
   @Patch(':id/confirm-check-in')
-  @ApiOperation({ summary: 'Confirm student check-in with the six-digit code' })
+  @ApiOperation({ summary: 'Manually confirm a student check-in' })
   @ApiOkResponse({ type: StaffBookingResponseDto })
-  @ApiBadRequestResponse({ description: 'Invalid code format' })
+  @ApiBadRequestResponse({ description: 'Check-in confirmation takes no body' })
   @ApiNotFoundResponse({ description: 'Booking not found' })
   @ApiConflictResponse({
-    description: 'Check-in unavailable or code incorrect',
+    description: 'Check-in unavailable',
   })
   async confirmCheckIn(
     @CurrentUser('id') staffId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ConfirmCheckInDto,
+    @Body() body: unknown,
   ): Promise<StaffBookingResponseDto> {
+    if (body !== undefined) {
+      throw new BadRequestException('Check-in confirmation takes no body');
+    }
     try {
       return this.staffResponse(
-        await this.bookingsService.confirmCheckIn(staffId, id, dto.code),
+        await this.bookingsService.confirmCheckIn(staffId, id),
       );
     } catch (error: unknown) {
       this.mapLifecycleError(error);
@@ -203,7 +206,9 @@ export class StaffBookingsController {
   }
 
   @Patch(':id/no-show')
-  @ApiOperation({ summary: 'Mark an ended unchecked booking as no-show' })
+  @ApiOperation({
+    summary: 'Mark a booking that missed its check-in deadline as no-show',
+  })
   @ApiOkResponse({ type: StaffBookingResponseDto })
   @ApiNotFoundResponse({ description: 'Booking not found' })
   @ApiConflictResponse({ description: 'No-show cannot be recorded yet' })
@@ -232,6 +237,7 @@ export class StaffBookingsController {
       ),
       canCheckOut: this.bookingsService.canCheckOut(booking),
       canMarkNoShow: this.bookingsService.canMarkNoShow(booking, evaluatedAt),
+      checkInDeadline: this.bookingsService.checkInDeadline(booking),
     });
   }
 
@@ -243,7 +249,6 @@ export class StaffBookingsController {
       }
       if (
         error.code === 'CHECK_IN_NOT_AVAILABLE' ||
-        error.code === 'INVALID_CHECK_IN_CODE' ||
         error.code === 'BOOKING_NOT_CHECKED_IN' ||
         error.code === 'NO_SHOW_NOT_AVAILABLE'
       ) {

@@ -239,6 +239,38 @@ describe('Admin booking analytics (e2e)', () => {
     expect(response.body.definition).toContain('no-show requests');
   });
 
+  it('counts a released booking in status figures but not in demand', async () => {
+    const [released] = await dataSource.query<{ id: string }[]>(
+      `INSERT INTO bookings (
+        resource_id, requester_id, booking_date, start_time, end_time, status,
+        reviewed_at, reviewed_by_id, no_show_at, no_show_by_id
+      ) VALUES ($1, $2, '2099-03-05', '09:00', '12:00', 'no_show',
+        now(), $2, '2099-03-05T09:15:00+07:00', NULL)
+      RETURNING id`,
+      [resourceIds[0], studentId],
+    );
+    try {
+      const response = await api()
+        .get('/api/admin/analytics')
+        .query({ from: '2099-03-05', to: '2099-03-05' })
+        .set('Cookie', adminCookie)
+        .expect(200);
+      expect(response.body.totalBookings).toBe(1);
+      expect(response.body.statuses).toEqual(
+        expect.arrayContaining([
+          { status: 'no_show', count: 1, percentage: 100 },
+        ]),
+      );
+      expect(response.body.popularResources).toEqual([]);
+      expect(response.body.peakHours).toEqual([]);
+      expect(response.body.definition).toContain('released automatically');
+    } finally {
+      await dataSource.query('DELETE FROM bookings WHERE id = $1', [
+        released.id,
+      ]);
+    }
+  });
+
   it('returns a complete zero-data shape', async () => {
     const response = await api()
       .get('/api/admin/analytics')
@@ -253,7 +285,7 @@ describe('Admin booking analytics (e2e)', () => {
     expect(response.body.utilizationRate).toBeNull();
     expect(response.body.popularResources).toEqual([]);
     expect(response.body.peakHours).toEqual([]);
-    expect(response.body.statuses).toHaveLength(7);
+    expect(response.body.statuses).toHaveLength(8);
     expect(
       response.body.statuses.every(
         (entry: { count: number }) => entry.count === 0,

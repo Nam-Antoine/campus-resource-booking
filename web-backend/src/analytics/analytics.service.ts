@@ -17,6 +17,13 @@ const DEMAND_STATUSES = [
   BookingStatus.COMPLETED,
   BookingStatus.NO_SHOW,
 ];
+/**
+ * A no-show without a staff actor was released by the missed check-in job.
+ * Its remaining hours may be booked again, so counting it as demand would
+ * count those hours twice.
+ */
+const RELEASED_NO_SHOW_SQL = `NOT (booking.status = 'no_show' AND booking.no_show_by_id IS NULL)`;
+
 const UTILIZATION_STATUSES = [
   BookingStatus.PENDING,
   BookingStatus.CONFIRMED,
@@ -24,7 +31,7 @@ const UTILIZATION_STATUSES = [
   BookingStatus.COMPLETED,
 ];
 const DEFINITION =
-  'Bookings are grouped by scheduled campus date. Total and status figures include every request. Popular resources and peak hours include pending or accepted requests, including no-shows; cancelled and rejected requests are excluded. Scheduled utilization includes pending through completed bookings for resources in the current active catalog; cancelled, rejected, and no-show requests are excluded. Capacity uses those resources’ current configured operating days and hours from their creation date, less full-day closures.';
+  'Bookings are grouped by scheduled campus date. Total and status figures include every request. Popular resources and peak hours include pending or accepted requests, including no-shows recorded by staff; cancelled, rejected, and expired requests are excluded, and so are bookings released automatically after a missed check-in, because their hours can be booked again. Scheduled utilization includes pending through completed bookings for resources in the current active catalog; cancelled, rejected, expired, and no-show requests are excluded. Capacity uses those resources’ current configured operating days and hours from their creation date, less full-day closures.';
 
 type CountRow = { status: BookingStatus; count: string };
 type PopularRow = {
@@ -170,6 +177,7 @@ export class AnalyticsService {
       .andWhere('booking.status IN (:...statuses)', {
         statuses: DEMAND_STATUSES,
       })
+      .andWhere(RELEASED_NO_SHOW_SQL)
       .groupBy('resource.id')
       .addGroupBy('building.name')
       .orderBy('COUNT(*)', 'DESC')
@@ -192,6 +200,7 @@ export class AnalyticsService {
        ) AS hour
        WHERE booking.booking_date BETWEEN $1 AND $2
          AND booking.status = ANY($3::bookings_status_enum[])
+         AND ${RELEASED_NO_SHOW_SQL}
        GROUP BY hour
        ORDER BY hour ASC`,
       [from, to, DEMAND_STATUSES],

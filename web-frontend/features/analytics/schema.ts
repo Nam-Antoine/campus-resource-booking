@@ -16,6 +16,7 @@ const STATUSES: BookingStatus[] = [
   "no_show",
   "rejected",
   "cancelled",
+  "expired",
 ];
 const STATUS_SET = new Set<string>(STATUSES);
 

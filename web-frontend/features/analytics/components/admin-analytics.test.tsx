@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 const user = { id: "10000000-0000-4000-8000-000000000001", email: "admin@usth.edu.vn", fullName: "Analytics Admin", role: "admin" as const, createdAt: "2099-01-01T00:00:00.000Z" };
 const statuses = [
   ["pending", 2, 40], ["confirmed", 1, 20], ["checked_in", 0, 0],
-  ["completed", 1, 20], ["no_show", 0, 0], ["rejected", 0, 0], ["cancelled", 1, 20],
+  ["completed", 1, 20], ["no_show", 0, 0], ["rejected", 0, 0], ["cancelled", 1, 20], ["expired", 0, 0],
 ].map(([status, count, percentage]) => ({ status, count, percentage })) as AnalyticsSummary["statuses"];
 const summary: AnalyticsSummary = {
   from: "2099-03-01", to: "2099-03-31", timeZone: "Asia/Ho_Chi_Minh",

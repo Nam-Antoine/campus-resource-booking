@@ -23,6 +23,7 @@ To run everything in Docker instead, see the [root README](../README.md).
 - **Code layout:** one feature module per folder in `src/` (`auth`, `users`, `resources`, `bookings`, `analytics`, `events`, ...). Controllers handle HTTP, services hold the rules, DTOs validate input and shape responses. Configuration is read only through `src/config/`.
 - **Schema:** migrations in `src/database/migrations` are the source of truth; `synchronize` stays off.
 - **Scripts:** the demo data, benchmark and load-test tools live in `src/scripts/`.
+- **Arrival:** the student shows the confirmed booking in their account; staff match its full ID, student, resource, and time against `GET /staff/bookings/:id`, then call `PATCH /staff/bookings/:id/confirm-check-in` with **no body**. Only staff/admin can confirm, and only from 15 minutes before until 15 minutes after the booking starts. Pending bookings need approval first. The student code-generation endpoint has been removed; existing codes are retired by migration `1727000000000-ManualStaffCheckIn`. Unchecked confirmed bookings are released after the deadline.
 
 ## Commands
 
@@ -36,6 +37,7 @@ To run everything in Docker instead, see the [root README](../README.md).
 | `npm run migration:run` | Apply pending migrations |
 | `npm run migration:generate -- src/database/migrations/Name` | Generate a migration from entity changes (review it before applying) |
 | `npm run migration:revert` | Revert the last migration |
+| `npm run demo:seed` / `npm run demo:clean` | Create/remove disposable demo accounts and bookings; requires `DEMO_PASSWORD` and a local non-production database |
 | `npm run catalog:import` / `catalog:clean` | Import or remove the demo rooms, labs, and equipment |
 | `npm run bench:availability` | Benchmark availability queries ([results](../docs/benchmarks/README.md)) |
 | `npm run load:test` | Load and stress test the API in a throwaway database ([results](../docs/benchmarks/performance-comparison.md)) |
@@ -52,3 +54,4 @@ Every variable is validated at startup, so a bad value fails immediately. `.env.
 | `AUTH_COOKIE_SECURE` | `true` in production | HTTPS-only cookie |
 | `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | local Compose database | PostgreSQL connection |
 | `BOOTSTRAP_ADMIN_*`, `BOOTSTRAP_STAFF_*` | unset | First admin and staff accounts ([root README](../README.md#admin-and-staff-accounts)) |
+| `BOOKING_RELEASE_INTERVAL_SECONDS` | `60` | How often missed check-ins and unreviewed requests are released; `0` disables automatic release |

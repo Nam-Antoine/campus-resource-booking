@@ -21,6 +21,8 @@ const booking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
+  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  releasedAutomatically: false,
   cancelledAt: null,
   reviewedAt: null,
   rejectionReason: null,

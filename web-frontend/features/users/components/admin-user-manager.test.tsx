@@ -2,7 +2,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  updateUserRole,
+  createStaffAccount,
+  StaffAccountError,
   updateUserStatus,
   UserMutationError,
 } from "../api/browser";
@@ -12,9 +13,12 @@ import { AdminUserManager } from "./admin-user-manager";
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("../api/browser", () => ({
-  updateUserRole: vi.fn(),
+  createStaffAccount: vi.fn(),
   updateUserStatus: vi.fn(),
   UserMutationError: class UserMutationError extends Error {
+    constructor(public readonly code: string, message: string) { super(message); }
+  },
+  StaffAccountError: class StaffAccountError extends Error {
     constructor(public readonly code: string, message: string) { super(message); }
   },
 }));
@@ -62,49 +66,107 @@ function renderManager(
 
 describe("AdminUserManager", () => {
   beforeEach(() => {
-    vi.mocked(updateUserRole).mockReset();
+    vi.mocked(createStaffAccount).mockReset();
     vi.mocked(updateUserStatus).mockReset();
     refresh.mockReset();
   });
 
-  it("renders directory controls and protects the current administrator", () => {
+  it("shows roles read-only and protects the current administrator", () => {
     renderManager();
     expect(screen.getByRole("heading", { name: "Put the right access in the right hands" })).toBeVisible();
     expect(screen.getByRole("navigation", { name: "Administrator sections" })).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: /Role for/ })).not.toBeInTheDocument();
     const selfRow = screen.getByText("admin@usth.edu.vn").closest("tr")!;
-    expect(within(selfRow).getByRole("combobox", { name: "Role for Campus Admin" })).toBeDisabled();
+    expect(within(selfRow).getByText("Administrator")).toBeVisible();
     expect(within(selfRow).getByRole("button", { name: "Deactivate" })).toBeDisabled();
+    const studentRow = screen.getByText("student@usth.edu.vn").closest("tr")!;
+    expect(within(studentRow).getByText("Student")).toBeVisible();
   });
 
-  it("confirms a role assignment and focuses the outcome", async () => {
-    vi.mocked(updateUserRole).mockResolvedValue({ ...student, role: "staff" });
+  it("creates a staff account, announces it, and refreshes the directory", async () => {
+    vi.mocked(createStaffAccount).mockResolvedValue({
+      ...student,
+      id: "30000000-0000-4000-8000-000000000003",
+      email: "lan.pham@usth.edu.vn",
+      fullName: "Lan Pham",
+      role: "staff",
+    });
     renderManager();
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Role for Directory Student" }), "staff");
-    expect(screen.getByRole("alertdialog")).toHaveFocus();
-    expect(screen.getByRole("heading", { name: "Assign Staff role?" })).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Confirm change" }));
-    expect(updateUserRole).toHaveBeenCalledWith(student.id, "staff");
+    const toggle = screen.getByRole("button", { name: "Create staff account" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    const form = screen.getByRole("form", { name: "Create a staff account" });
+    expect(within(form).getByLabelText("Full name")).toHaveFocus();
+    await userEvent.type(within(form).getByLabelText("Full name"), "Lan Pham");
+    await userEvent.type(within(form).getByLabelText("USTH email"), "lan.pham@usth.edu.vn");
+    await userEvent.type(within(form).getByLabelText("Initial password"), "initial-pass");
+    await userEvent.click(within(form).getByRole("button", { name: "Create staff account" }));
+
+    expect(createStaffAccount).toHaveBeenCalledWith({
+      fullName: "Lan Pham",
+      email: "lan.pham@usth.edu.vn",
+      password: "initial-pass",
+    });
     await waitFor(() => expect(screen.getByRole("status")).toHaveFocus());
-    expect(screen.getByRole("status")).toHaveTextContent("Directory Student is now staff");
+    expect(screen.getByRole("status")).toHaveTextContent("Lan Pham can now sign in as staff");
+    expect(screen.queryByRole("form", { name: "Create a staff account" })).not.toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("shows the refreshed directory the server sends after a change", () => {
+    const view = renderManager([adminUser]);
+    expect(screen.queryByText("student@usth.edu.vn")).not.toBeInTheDocument();
+    view.rerender(
+      <AdminUserManager
+        currentUser={currentUser}
+        directory={{ items: [adminUser, student], total: 2, page: 1, pageSize: 20, totalPages: 1 }}
+        filters={{ page: 1 }}
+      />,
+    );
+    expect(screen.getByText("student@usth.edu.vn")).toBeVisible();
+    expect(screen.getByText("1–2 of 2 accounts")).toBeVisible();
+  });
+
+  it("keeps the staff form open with the reason when creation fails", async () => {
+    vi.mocked(createStaffAccount).mockRejectedValue(
+      new StaffAccountError("duplicate", "An account already exists for this USTH email. Find it in the directory instead."),
+    );
+    renderManager();
+    await userEvent.click(screen.getByRole("button", { name: "Create staff account" }));
+    const form = screen.getByRole("form", { name: "Create a staff account" });
+    await userEvent.type(within(form).getByLabelText("Full name"), "Directory Student");
+    await userEvent.type(within(form).getByLabelText("USTH email"), "student@usth.edu.vn");
+    await userEvent.type(within(form).getByLabelText("Initial password"), "initial-pass");
+    await userEvent.click(within(form).getByRole("button", { name: "Create staff account" }));
+
+    expect(await within(form).findByRole("alert")).toHaveTextContent("already exists");
+    expect(within(form).getByLabelText("USTH email")).toHaveValue("student@usth.edu.vn");
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("returns focus to the toggle when the staff form is cancelled", async () => {
+    renderManager();
+    const toggle = screen.getByRole("button", { name: "Create staff account" });
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("form", { name: "Create a staff account" })).not.toBeInTheDocument();
+    await waitFor(() => expect(toggle).toHaveFocus());
   });
 
   it("restores the initiating control when a change is cancelled", async () => {
     renderManager();
-    const role = screen.getByRole("combobox", {
-      name: "Role for Directory Student",
-    });
-    await userEvent.selectOptions(role, "staff");
+    const deactivate = screen.getAllByRole("button", { name: "Deactivate" }).at(-1)!;
+    await userEvent.click(deactivate);
+    expect(screen.getByRole("alertdialog")).toHaveFocus();
     await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(role).toHaveFocus());
+    await waitFor(() => expect(deactivate).toHaveFocus());
   });
 
   it("traps keyboard focus inside the confirmation dialog", async () => {
     renderManager();
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Role for Directory Student" }),
-      "staff",
-    );
+    await userEvent.click(screen.getAllByRole("button", { name: "Deactivate" }).at(-1)!);
     const keep = screen.getByRole("button", { name: "Keep current access" });
     const confirm = screen.getByRole("button", { name: "Confirm change" });
     confirm.focus();
@@ -138,17 +200,14 @@ describe("AdminUserManager", () => {
   });
 
   it("offers a safe sign-in destination when the session expires", async () => {
-    vi.mocked(updateUserRole).mockRejectedValue(
+    vi.mocked(updateUserStatus).mockRejectedValue(
       new UserMutationError(
         "session",
         "Your session has ended. Sign in again to manage users.",
       ),
     );
     renderManager();
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Role for Directory Student" }),
-      "staff",
-    );
+    await userEvent.click(screen.getAllByRole("button", { name: "Deactivate" }).at(-1)!);
     await userEvent.click(screen.getByRole("button", { name: "Confirm change" }));
 
     expect(await screen.findByRole("link", { name: "Sign in again" })).toHaveAttribute(

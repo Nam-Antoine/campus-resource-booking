@@ -105,6 +105,7 @@ jobs:
       THROTTLE_TTL: 60
       THROTTLE_LIMIT: 100000
       AUTH_THROTTLE_LIMIT: 100000
+      BOOKING_RELEASE_INTERVAL_SECONDS: 0
     defaults:
       run:
         working-directory: web-backend

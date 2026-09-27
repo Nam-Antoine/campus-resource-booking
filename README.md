@@ -16,7 +16,7 @@ openssl rand -base64 48   # paste the output into AUTH_JWT_SECRET in .env
 docker compose up -d --build
 ```
 
-The first build takes a few minutes. Database migrations run automatically.
+The first build takes a few minutes. Database migrations run automatically **before** the backend starts. On an existing installation, take a database backup before upgrading: the manual check-in migration retires outstanding six-digit codes. Confirm all three services are healthy with `docker compose ps` after rebuilding.
 
 | Service | URL |
 | --- | --- |
@@ -52,8 +52,14 @@ BOOTSTRAP_STAFF_PASSWORD=<a strong password>
 ```
 
 - Accounts are created at backend startup if they don't exist yet (emails must be exact `@usth.edu.vn` addresses; passwords 8+ characters).
-- Existing accounts are never changed, so editing a password here later has no effect; change it in the app instead.
+- Existing accounts are never changed: editing the bootstrap password later has no effect. There is currently no in-app password-change/reset flow. Use disposable test accounts for demos; for a real compromised account, disable it and arrange a controlled credential-rotation procedure before restoring access. Do not assume a Compose restart rotates existing passwords.
 - If no active admin remains, the configured admin account is restored to admin at the next startup.
+
+## Booking confirmation and staff check-in
+
+Students find their confirmed reservation under **My bookings → View details**. It shows their name and university email, the full booking ID, resource, building/location, date, and time. Requests awaiting approval do **not** count as confirmations. At the resource, students show that screen in their signed-in account; staff compare the booking ID and details with the live record in **Staff → Arrivals and unresolved visits → Open visit**, then click **Confirm check-in**. There is no six-digit code to generate or enter. Staff check-in opens 15 minutes before the start and closes 15 minutes after; if staff do not confirm by then, the booking is released. Staff confirm check-out at the end of the visit.
+
+Upgrading from the earlier code-based flow requires rebuilding **both** backend and frontend after backing up the database. Migration `1727000000000-ManualStaffCheckIn` clears outstanding codes without discarding checked-in history. Do not serve an old frontend against the new API: the student code-generation endpoint is gone. For a disposable end-to-end demonstration, see [demo data and browser smoke matrix](docs/MVP_RELEASE.md#5-demo-data).
 
 ## Demo rooms, labs, and equipment
 

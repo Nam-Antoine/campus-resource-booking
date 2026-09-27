@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseAnalyticsSummary } from "./schema";
 
-const statuses = ["pending", "confirmed", "checked_in", "completed", "no_show", "rejected", "cancelled"].map((status, index) => ({ status, count: index === 0 ? 2 : 0, percentage: index === 0 ? 100 : 0 }));
+const statuses = ["pending", "confirmed", "checked_in", "completed", "no_show", "rejected", "cancelled", "expired"].map((status, index) => ({ status, count: index === 0 ? 2 : 0, percentage: index === 0 ? 100 : 0 }));
 
 const summary = {
   from: "2099-03-01", to: "2099-03-31", timeZone: "Asia/Ho_Chi_Minh",

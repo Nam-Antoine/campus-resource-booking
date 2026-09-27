@@ -13,6 +13,7 @@ const STATUS_LABELS = {
   no_show: "No-show",
   rejected: "Rejected",
   cancelled: "Cancelled",
+  expired: "Expired",
 } as const;
 
 function displayDate(value: string) {

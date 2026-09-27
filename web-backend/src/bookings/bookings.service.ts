@@ -1,4 +1,3 @@
-import { randomInt } from 'crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import {
@@ -19,6 +18,10 @@ import {
 import { ResourceClosure } from '../resources/entities/resource-closure.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceStatus } from '../resources/enums/resource-status.enum';
+import {
+  CHECK_IN_GRACE_MINUTES,
+  CHECK_IN_OPENS_MINUTES_BEFORE_START,
+} from './bookings.constants';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { Booking } from './entities/booking.entity';
 import { BookingStatus } from './enums/booking-status.enum';
@@ -175,8 +178,8 @@ export class BookingsService {
   }
 
   /**
-   * Pending requests that can still be reviewed, i.e. whose scheduled end has
-   * not passed in campus time. Filtering happens in SQL so `total` and the
+   * Pending requests that can still be reviewed, i.e. whose check-in deadline
+   * has not passed in campus time. Filtering happens in SQL so `total` and the
    * page boundaries agree with what staff can act on.
    */
   async findPendingForStaff(
@@ -188,17 +191,22 @@ export class BookingsService {
     evaluatedAt: Date;
   }> {
     const evaluatedAt = this.clock();
-    const today = campusDateOf(evaluatedAt);
-    const nowTime = campusTimeOf(evaluatedAt);
+    // Reviewable until the check-in deadline, i.e. while start > now - grace.
+    // Starts are whole hours, so minute precision is exact.
+    const cutoff = new Date(
+      evaluatedAt.getTime() - CHECK_IN_GRACE_MINUTES * 60 * 1000,
+    );
+    const cutoffDate = campusDateOf(cutoff);
+    const cutoffTime = campusTimeOf(cutoff);
     const [bookings, total] = await this.dataSource
       .getRepository(Booking)
       .findAndCount({
         where: [
-          { status: BookingStatus.PENDING, date: MoreThan(today) },
+          { status: BookingStatus.PENDING, date: MoreThan(cutoffDate) },
           {
             status: BookingStatus.PENDING,
-            date: today,
-            endTime: MoreThan(nowTime),
+            date: cutoffDate,
+            startTime: MoreThan(cutoffTime),
           },
         ],
         relations: this.staffRelations(),
@@ -261,46 +269,7 @@ export class BookingsService {
     return booking;
   }
 
-  async requestCheckIn(
-    requesterId: string,
-    bookingId: string,
-  ): Promise<Booking> {
-    return this.dataSource.transaction(async (manager) => {
-      const booking = await this.lockStudentBooking(
-        manager,
-        requesterId,
-        bookingId,
-      );
-      if (!booking) {
-        throw new BookingDomainError('BOOKING_NOT_FOUND', 'Booking not found');
-      }
-      if (booking.checkInRequestedAt || booking.checkInCode) {
-        throw new BookingDomainError(
-          'CHECK_IN_ALREADY_REQUESTED',
-          'A check-in code has already been generated for this booking',
-        );
-      }
-      const now = this.clock();
-      if (!this.canRequestCheckIn(booking, now)) {
-        throw new BookingDomainError(
-          'CHECK_IN_NOT_AVAILABLE',
-          'Check-in opens 15 minutes before a confirmed booking and closes at its end time',
-        );
-      }
-
-      await manager.getRepository(Booking).update(booking.id, {
-        checkInCode: randomInt(0, 1_000_000).toString().padStart(6, '0'),
-        checkInRequestedAt: now,
-      });
-      return this.reloadStudentBooking(manager, booking.id);
-    });
-  }
-
-  async confirmCheckIn(
-    staffId: string,
-    bookingId: string,
-    code: string,
-  ): Promise<Booking> {
+  async confirmCheckIn(staffId: string, bookingId: string): Promise<Booking> {
     return this.dataSource.transaction(async (manager) => {
       const booking = await this.lockBooking(manager, bookingId);
       if (!booking) {
@@ -309,7 +278,6 @@ export class BookingsService {
       const now = this.clock();
       if (
         booking.status !== BookingStatus.CONFIRMED ||
-        !booking.checkInCode ||
         !this.isWithinCheckInWindow(booking, now)
       ) {
         throw new BookingDomainError(
@@ -317,13 +285,6 @@ export class BookingsService {
           'This booking cannot be checked in now',
         );
       }
-      if (booking.checkInCode !== code) {
-        throw new BookingDomainError(
-          'INVALID_CHECK_IN_CODE',
-          'The check-in code is incorrect',
-        );
-      }
-
       await manager.getRepository(Booking).update(booking.id, {
         status: BookingStatus.CHECKED_IN,
         checkInCode: null,
@@ -370,11 +331,11 @@ export class BookingsService {
       const now = this.clock();
       if (
         lockedBooking.status !== BookingStatus.CONFIRMED ||
-        now.getTime() < this.bookingEndMs(lockedBooking)
+        now.getTime() < this.checkInDeadlineMs(lockedBooking)
       ) {
         throw new BookingDomainError(
           'NO_SHOW_NOT_AVAILABLE',
-          'Only an ended, unchecked confirmed booking can be marked as a no-show',
+          'Only a confirmed booking that missed its check-in deadline can be marked as a no-show',
         );
       }
 
@@ -391,6 +352,69 @@ export class BookingsService {
       booking.date,
     );
     return booking;
+  }
+
+  /**
+   * Frees every slot whose check-in deadline (CHECK_IN_GRACE_MINUTES after the
+   * start) has passed without the booking being used:
+   * - a confirmed booking staff have not checked in becomes a no-show with no
+   *   staff actor, even if it has a legacy check-in request timestamp;
+   * - a request nobody reviewed becomes expired.
+   * Neither status holds the slot, so any remaining whole hours become
+   * bookable again.
+   */
+  async releaseMissedDeadlines(): Promise<{
+    released: number;
+    expired: number;
+  }> {
+    const now = this.clock();
+    const released = await this.updatePastDeadline(
+      BookingStatus.CONFIRMED,
+      { status: BookingStatus.NO_SHOW, noShowAt: now, checkInCode: null },
+      now,
+    );
+    const expired = await this.updatePastDeadline(
+      BookingStatus.PENDING,
+      { status: BookingStatus.EXPIRED },
+      now,
+    );
+
+    const changed = new Map<string, { resourceId: string; date: string }>();
+    for (const row of [...released, ...expired]) {
+      changed.set(`${row.resource_id}:${row.booking_date}`, {
+        resourceId: row.resource_id,
+        date: row.booking_date,
+      });
+    }
+    for (const { resourceId, date } of changed.values()) {
+      this.availabilityEvents.notifyAvailabilityChanged(resourceId, date);
+    }
+    return { released: released.length, expired: expired.length };
+  }
+
+  private async updatePastDeadline(
+    from: BookingStatus.CONFIRMED | BookingStatus.PENDING,
+    changes: Partial<Booking>,
+    now: Date,
+  ): Promise<{ resource_id: string; booking_date: string }[]> {
+    const result = await this.dataSource
+      .getRepository(Booking)
+      .createQueryBuilder()
+      .update(Booking)
+      .set(changes)
+      .where('status = :from', { from })
+      // Lets the status partial indexes skip every future booking.
+      .andWhere('booking_date <= :today', { today: campusDateOf(now) })
+      .andWhere(
+        `(("booking_date" + "start_time") AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          + make_interval(mins => :graceMinutes) <= :now`,
+        { graceMinutes: CHECK_IN_GRACE_MINUTES, now },
+      )
+      .returning(
+        `"resource_id", to_char("booking_date", 'YYYY-MM-DD') AS "booking_date"`,
+      )
+      .execute();
+    return result.raw as { resource_id: string; booking_date: string }[];
   }
 
   async cancel(requesterId: string, bookingId: string): Promise<Booking> {
@@ -414,6 +438,7 @@ export class BookingsService {
       await manager.getRepository(Booking).update(lockedBooking.id, {
         status: BookingStatus.CANCELLED,
         cancelledAt: now,
+        checkInRequestedAt: null,
       });
       return (await manager.getRepository(Booking).findOne({
         where: { id: lockedBooking.id },
@@ -431,16 +456,7 @@ export class BookingsService {
     return (
       (booking.status === BookingStatus.PENDING ||
         booking.status === BookingStatus.CONFIRMED) &&
-      booking.checkInRequestedAt === null &&
       isFutureCampusTime(booking.date, booking.startTime.slice(0, 5), now)
-    );
-  }
-
-  canRequestCheckIn(booking: Booking, now: Date = this.clock()): boolean {
-    return (
-      booking.status === BookingStatus.CONFIRMED &&
-      !booking.checkInRequestedAt &&
-      this.isWithinCheckInWindow(booking, now)
     );
   }
 
@@ -451,14 +467,13 @@ export class BookingsService {
   canReview(booking: Booking, now: Date = this.clock()): boolean {
     return (
       booking.status === BookingStatus.PENDING &&
-      now.getTime() < this.bookingEndMs(booking)
+      now.getTime() < this.checkInDeadlineMs(booking)
     );
   }
 
   canConfirmCheckIn(booking: Booking, now: Date = this.clock()): boolean {
     return (
       booking.status === BookingStatus.CONFIRMED &&
-      booking.checkInRequestedAt !== null &&
       this.isWithinCheckInWindow(booking, now)
     );
   }
@@ -470,8 +485,13 @@ export class BookingsService {
   canMarkNoShow(booking: Booking, now: Date = this.clock()): boolean {
     return (
       booking.status === BookingStatus.CONFIRMED &&
-      now.getTime() >= this.bookingEndMs(booking)
+      now.getTime() >= this.checkInDeadlineMs(booking)
     );
+  }
+
+  /** When check-in closes and an unchecked confirmed booking is released. */
+  checkInDeadline(booking: Booking): Date {
+    return new Date(this.checkInDeadlineMs(booking));
   }
 
   private async review(
@@ -500,7 +520,7 @@ export class BookingsService {
       if (!this.canReview(booking, reviewedAt)) {
         throw new BookingDomainError(
           'BOOKING_REVIEW_WINDOW_ENDED',
-          'This booking request can no longer be reviewed because its scheduled time has ended',
+          'This booking request can no longer be reviewed because its check-in deadline, 15 minutes after the start, has passed',
         );
       }
 
@@ -527,10 +547,17 @@ export class BookingsService {
   }
 
   private isWithinCheckInWindow(booking: Booking, now: Date): boolean {
-    const opensAt = this.bookingStartMs(booking) - 15 * 60 * 1000;
+    const opensAt =
+      this.bookingStartMs(booking) -
+      CHECK_IN_OPENS_MINUTES_BEFORE_START * 60 * 1000;
     return (
-      now.getTime() >= opensAt && now.getTime() < this.bookingEndMs(booking)
+      now.getTime() >= opensAt &&
+      now.getTime() < this.checkInDeadlineMs(booking)
     );
+  }
+
+  private checkInDeadlineMs(booking: Booking): number {
+    return this.bookingStartMs(booking) + CHECK_IN_GRACE_MINUTES * 60 * 1000;
   }
 
   private bookingStartMs(booking: Booking): number {

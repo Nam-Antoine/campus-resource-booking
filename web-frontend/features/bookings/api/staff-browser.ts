@@ -60,7 +60,7 @@ function mapError(
             unexpected: "This review could not be saved. Try again.",
           }
         : {
-            validation: "Enter the six-digit code shown by the student.",
+            validation: "This visit cannot be confirmed with the provided details. Refresh and try again.",
             session:
               "Your session has ended. Sign in again before updating this visit.",
             forbidden: "Only staff accounts can update campus visits.",
@@ -113,31 +113,29 @@ async function reviewBooking(
 
 export function confirmStaffCheckIn(
   id: string,
-  code: string,
   request: typeof fetch = fetch,
 ): Promise<StaffBooking> {
-  return lifecycleBooking(id, "confirm-check-in", "checked_in", { code }, request);
+  return lifecycleBooking(id, "confirm-check-in", "checked_in", request);
 }
 
 export function checkOutStaffBooking(
   id: string,
   request: typeof fetch = fetch,
 ): Promise<StaffBooking> {
-  return lifecycleBooking(id, "check-out", "completed", undefined, request);
+  return lifecycleBooking(id, "check-out", "completed", request);
 }
 
 export function markStaffBookingNoShow(
   id: string,
   request: typeof fetch = fetch,
 ): Promise<StaffBooking> {
-  return lifecycleBooking(id, "no-show", "no_show", undefined, request);
+  return lifecycleBooking(id, "no-show", "no_show", request);
 }
 
 async function lifecycleBooking(
   id: string,
   action: "confirm-check-in" | "check-out" | "no-show",
   expectedStatus: "checked_in" | "completed" | "no_show",
-  body: { code: string } | undefined,
   request: typeof fetch,
 ): Promise<StaffBooking> {
   try {
@@ -146,7 +144,6 @@ async function lifecycleBooking(
         `/staff/bookings/${id}/${action}`,
         {
           method: "PATCH",
-          body: body ? JSON.stringify(body) : undefined,
         },
         request,
       ),

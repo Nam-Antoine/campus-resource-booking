@@ -6,7 +6,7 @@ import { SessionExpiredError } from "@/lib/api/session";
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 
-const statuses = ["pending", "confirmed", "checked_in", "completed", "no_show", "rejected", "cancelled"].map((status, index) => ({ status, count: index === 0 ? 1 : 0, percentage: index === 0 ? 100 : 0 }));
+const statuses = ["pending", "confirmed", "checked_in", "completed", "no_show", "rejected", "cancelled", "expired"].map((status, index) => ({ status, count: index === 0 ? 1 : 0, percentage: index === 0 ? 100 : 0 }));
 const summary = {
   from: "2099-03-01", to: "2099-03-31", timeZone: "Asia/Ho_Chi_Minh",
   totalBookings: 1, cancelledBookings: 0, cancellationRate: 0, scheduledHours: 2,

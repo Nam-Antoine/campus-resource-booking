@@ -31,6 +31,7 @@ import type {
   StaffResourceSchedule,
 } from "../types";
 import { staffQueueHref } from "../staff-query";
+import { campusClockTime } from "../status";
 import styles from "./staff-bookings.module.css";
 
 const statusLabels: Record<StaffBooking["status"], string> = {
@@ -41,6 +42,7 @@ const statusLabels: Record<StaffBooking["status"], string> = {
   no_show: "No-show",
   rejected: "Rejected",
   cancelled: "Cancelled",
+  expired: "Expired request",
 };
 
 function isReviewWindowClosed(booking: StaffBooking): boolean {
@@ -49,7 +51,7 @@ function isReviewWindowClosed(booking: StaffBooking): boolean {
 
 function staffStatus(booking: StaffBooking): { key: string; label: string } {
   return isReviewWindowClosed(booking)
-    ? { key: "expired", label: "Expired request" }
+    ? { key: "pending", label: "Review window ended" }
     : { key: booking.status, label: statusLabels[booking.status] };
 }
 
@@ -112,7 +114,7 @@ export function StaffApprovalQueue({
   queue: StaffBookingQueue;
   operations: StaffOperationsQueue;
 }) {
-  const codeReady = operations.items.filter(
+  const arrivalsReady = operations.items.filter(
     (booking) => booking.canConfirmCheckIn,
   ).length;
   const activeVisits = operations.items.filter(
@@ -142,7 +144,7 @@ export function StaffApprovalQueue({
         <section className={styles.summary} aria-label="Staff dashboard summary">
           <div><StatusIcon /><strong>{queue.total}</strong><span>Requests to review</span></div>
           <div><CalendarIcon /><strong>{operations.total}</strong><span>Open visits to manage</span></div>
-          <div><ShieldCheckIcon /><strong>{codeReady}</strong><span>{operationsPaged ? "Codes ready on this page" : "Codes ready to verify"}</span></div>
+          <div><ShieldCheckIcon /><strong>{arrivalsReady}</strong><span>{operationsPaged ? "Arrivals to confirm on this page" : "Arrivals to confirm"}</span></div>
           <div><ClockIcon /><strong>{activeVisits}</strong><span>{operationsPaged ? "Active visits on this page" : "Active visits"}</span></div>
           <div><ClockIcon /><strong>{oldest ? requestedAt(oldest.createdAt) : "—"}</strong><span>{queue.page > 1 ? "Oldest request on this page" : "Oldest request"}</span></div>
         </section>
@@ -162,7 +164,7 @@ export function StaffApprovalQueue({
                   </time>
                   <h3>{booking.resource.name}</h3>
                   <p>{booking.requester.fullName} · {booking.resource.location}</p>
-                  <strong>{booking.canCheckOut ? "Ready for checkout" : booking.canMarkNoShow ? "Ready for no-show review" : booking.canConfirmCheckIn ? "Code ready for staff" : booking.checkInRequested ? "Code generated · check-in unavailable" : "Awaiting student check-in"}</strong>
+                  <strong>{booking.canCheckOut ? "Ready for checkout" : booking.canMarkNoShow ? "Check-in missed" : booking.canConfirmCheckIn ? `Confirm arrival by ${campusClockTime(booking.checkInDeadline)}` : `Awaiting check-in · closes ${campusClockTime(booking.checkInDeadline)}`}</strong>
                   <Link prefetch={false} href={`/staff/bookings/${booking.id}`}>Open visit <ArrowRightIcon /></Link>
                 </article>
               ))}
@@ -242,7 +244,6 @@ export function StaffBookingDetail({
   const [booking, setBooking] = useState(initialBooking);
   const [mode, setMode] = useState<"idle" | "rejecting">("idle");
   const [isSaving, setIsSaving] = useState(false);
-  const [checkInCode, setCheckInCode] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState<StaffBookingActionError["code"] | null>(null);
@@ -259,18 +260,12 @@ export function StaffBookingDetail({
 
   async function operate(action: "check-in" | "check-out" | "no-show") {
     if (isSaving) return;
-    if (action === "check-in" && !/^\d{6}$/.test(checkInCode)) {
-      setError("Enter the six-digit code shown on the student booking.");
-      setErrorCode("validation");
-      requestAnimationFrame(() => errorRef.current?.focus());
-      return;
-    }
     setIsSaving(true);
     setError("");
     setErrorCode(null);
     try {
       const updated = action === "check-in"
-        ? await confirmStaffCheckIn(booking.id, checkInCode)
+        ? await confirmStaffCheckIn(booking.id)
         : action === "check-out"
           ? await checkOutStaffBooking(booking.id)
           : await markStaffBookingNoShow(booking.id);
@@ -324,7 +319,7 @@ export function StaffBookingDetail({
     .map((item) => (item.id === booking.id ? booking : item))
     .filter(
       (item) =>
-        (item.status === "pending" && item.canReview) ||
+        item.status === "pending" ||
         item.status === "confirmed" ||
         item.status === "checked_in",
     );
@@ -349,6 +344,8 @@ export function StaffBookingDetail({
             <div className={styles.panelHeading}><StatusIcon /><div><p>Booking request</p><h2 id="request-details-title">Decision context</h2></div></div>
             <dl className={styles.detailFacts}>
               <div><dt>Requested by</dt><dd>{booking.requester.fullName}</dd></div>
+              <div><dt>Booking ID</dt><dd className={styles.bookingId}>{booking.id}</dd></div>
+              <div><dt>Resource code</dt><dd>{booking.resource.code}</dd></div>
               <div><dt>University email</dt><dd>{booking.requester.email}</dd></div>
               <div><dt>Requested at</dt><dd>{requestedAt(booking.createdAt)}</dd></div>
               <div><dt>Resource type</dt><dd>{booking.resource.type}</dd></div>
@@ -366,11 +363,15 @@ export function StaffBookingDetail({
                     ? "Confirm campus arrival"
                     : booking.status === "checked_in"
                       ? "Complete this visit"
-                      : `${statusLabels[booking.status]} by staff`}
+                      : booking.status === "expired"
+                        ? "Request expired"
+                        : booking.releasedAutomatically
+                          ? "Released automatically"
+                          : `${statusLabels[booking.status]} by staff`}
               </h2>
               {booking.status === "pending" && booking.canReview ? (
                 <>
-                  <p>Approval confirms the booking. Rejection releases the interval immediately.</p>
+                  <p>Approval confirms the booking. Rejection releases the interval immediately. Decide by {campusClockTime(booking.checkInDeadline)}; after that the request cannot be reviewed and the system releases the time.</p>
                   {mode === "rejecting" ? (
                     <div className={styles.rejectForm}>
                       <label htmlFor="rejection-reason">Reason for rejection</label>
@@ -398,31 +399,22 @@ export function StaffBookingDetail({
                     </div>
                   )}
                 </>
-              ) : booking.status === "pending" ? (
-                <div className={styles.outcome} data-status="expired">
-                  <strong>Expired request · not reviewed in time</strong>
+              ) : booking.status === "pending" || booking.status === "expired" ? (
+                <div className={styles.outcome} data-status={booking.status === "expired" ? "expired" : "pending"}>
+                  <strong>{booking.status === "expired" ? "Expired request · not reviewed in time" : "Review window ended · awaiting release"}</strong>
                   <span>
-                    The scheduled time ended before anyone approved or rejected
-                    this request, so the review window has closed and it can no
-                    longer be reviewed. No action is needed; the student sees it
-                    as an expired request.
+                    Nobody approved or rejected this request by {campusClockTime(booking.checkInDeadline)}, 15 minutes after its start. {booking.status === "expired"
+                      ? "The system expired the request and released its time."
+                      : "Staff can no longer review it. The request is still pending until the release job updates it; its time may remain held until then."}
                   </span>
                 </div>
               ) : booking.status === "confirmed" ? (
                 <>
-                  <p>{booking.checkInRequested ? "Enter the six-digit code shown by the student." : "The student has not generated a check-in code yet."}</p>
+                  <p>{booking.canMarkNoShow
+                    ? `Check-in closed at ${campusClockTime(booking.checkInDeadline)}. This booking remains confirmed until a no-show is recorded; the slot may still be held. Record the no-show to release it.`
+                    : `Match the student's confirmation against the full booking ID, name, university email, resource, location and scheduled time above. Check the current status before confirming arrival. Check-in closes at ${campusClockTime(booking.checkInDeadline)}; if nobody is checked in by then, the system releases the booking.`}</p>
                   {booking.canConfirmCheckIn && (
                     <div className={styles.checkInForm}>
-                      <label htmlFor="staff-check-in-code">Student check-in code</label>
-                      <input
-                        id="staff-check-in-code"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        maxLength={6}
-                        value={checkInCode}
-                        onChange={(event) => setCheckInCode(event.target.value.replace(/\D/g, ""))}
-                        placeholder="000000"
-                      />
                       <button type="button" disabled={isSaving} onClick={() => void operate("check-in")}>
                         {isSaving ? "Confirming…" : "Confirm check-in"}
                       </button>
@@ -443,7 +435,7 @@ export function StaffBookingDetail({
                 </>
               ) : (
                 <div className={styles.outcome} data-status={booking.status}>
-                  <strong>{booking.status === "completed" ? "Visit completed" : booking.status === "no_show" ? "No-show recorded" : booking.status === "rejected" ? "Request rejected" : "Booking closed"}</strong>
+                  <strong>{booking.status === "completed" ? "Visit completed" : booking.status === "no_show" ? booking.releasedAutomatically ? `Released · not checked in by ${campusClockTime(booking.checkInDeadline)}` : "No-show recorded" : booking.status === "rejected" ? "Request rejected" : "Booking closed"}</strong>
                   <span>{booking.checkedOutAt ? requestedAt(booking.checkedOutAt) : booking.noShowAt ? requestedAt(booking.noShowAt) : booking.reviewedAt ? requestedAt(booking.reviewedAt) : "Update recorded"}</span>
                   {booking.rejectionReason && <p>{booking.rejectionReason}</p>}
                 </div>

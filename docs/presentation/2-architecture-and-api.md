@@ -82,7 +82,7 @@ erDiagram
         time startTime
         time endTime
         string status "pending … completed"
-        string checkInCode "6 digits"
+        datetime checkedInAt "staff-confirmed arrival"
     }
 ```
 
@@ -113,8 +113,7 @@ Base URL: `http://localhost:18320/api`. Interactive docs (Swagger): `http://loca
 | POST | `/bookings` | Book a resource for a date and time |
 | GET | `/bookings/mine` | My upcoming bookings and history |
 | GET | `/bookings/mine/{id}` | One of my bookings |
-| PATCH | `/bookings/mine/{id}/cancel` | Cancel (before it starts and before a check-in code is generated) |
-| PATCH | `/bookings/mine/{id}/check-in` | Get my 6-digit check-in code |
+| PATCH | `/bookings/mine/{id}/cancel` | Cancel while eligible |
 
 ### 🧑‍💼 Staff (and admin)
 | Method | Endpoint | What it does |
@@ -123,11 +122,11 @@ Base URL: `http://localhost:18320/api`. Interactive docs (Swagger): `http://loca
 | GET | `/staff/bookings/operations` | Current and overdue bookings |
 | GET | `/staff/bookings/resources/{resourceId}/schedule` | One resource's bookings for a day |
 | GET | `/staff/bookings/{id}` | Booking details |
-| PATCH | `/staff/bookings/{id}/approve` | Approve |
+| PATCH | `/staff/bookings/{id}/approve` | Approve (until 15 min after the start) |
 | PATCH | `/staff/bookings/{id}/reject` | Reject with a reason |
-| PATCH | `/staff/bookings/{id}/confirm-check-in` | Check in with the student's code |
+| PATCH | `/staff/bookings/{id}/confirm-check-in` | Record arrival after matching the student's confirmation |
 | PATCH | `/staff/bookings/{id}/check-out` | Check out |
-| PATCH | `/staff/bookings/{id}/no-show` | Mark as no-show |
+| PATCH | `/staff/bookings/{id}/no-show` | Mark as no-show (from 15 min after the start; also happens automatically) |
 
 ### 🛠️ Admin
 | Method | Endpoint | What it does |
@@ -139,7 +138,7 @@ Base URL: `http://localhost:18320/api`. Interactive docs (Swagger): `http://loca
 | GET, POST | `/admin/resources/{id}/closures` | List or add closure dates |
 | DELETE | `/admin/resources/{id}/closures/{closureId}` | Remove a closure |
 | GET | `/admin/users` | Search users |
-| PATCH | `/admin/users/{id}/role` | Change role |
+| POST | `/admin/users` | Create a staff account |
 | PATCH | `/admin/users/{id}/status` | Activate or deactivate |
 | GET | `/admin/analytics?from=&to=` | Booking and utilization statistics |
 
@@ -174,6 +173,7 @@ sequenceDiagram
 
 - **`availability:changed`** goes to everyone viewing that resource on that day. The student dashboard's "Today's availability" timeline also receives it for that date and refreshes.
 - **`resource:changed`** goes out when an admin edits a resource or changes its status.
+- A background job runs every minute and releases confirmed bookings that nobody checked in within 15 minutes of the start, and expires requests nobody reviewed by then. It sends the same `availability:changed`, so the freed hours reappear live.
 - A WebSocket connection needs a valid session. It is closed when the session expires or the user is deactivated.
 
 ## Performance in one table

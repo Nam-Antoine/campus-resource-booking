@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { updateUserRole, updateUserStatus } from "./browser";
+import { createStaffAccount, updateUserStatus } from "./browser";
 
 const user = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -24,34 +24,65 @@ describe("admin user browser API", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:18320/api/");
   });
 
-  it("updates a role with credentialed strict response validation", async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(response({ ...user, role: "staff" }));
-    await expect(updateUserRole(user.id, "staff", request)).resolves.toMatchObject({ role: "staff" });
+  it("updates account access with credentialed strict response validation", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(response({ ...user, isActive: false }));
+    await expect(updateUserStatus(user.id, false, request)).resolves.toMatchObject({ isActive: false });
     expect(request).toHaveBeenCalledWith(
-      `http://localhost:18320/api/admin/users/${user.id}/role`,
+      `http://localhost:18320/api/admin/users/${user.id}/status`,
       expect.objectContaining({
         method: "PATCH",
         credentials: "include",
-        body: JSON.stringify({ role: "staff" }),
+        body: JSON.stringify({ isActive: false }),
       }),
     );
-  });
-
-  it("updates account access", async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(response({ ...user, isActive: false }));
-    await expect(updateUserStatus(user.id, false, request)).resolves.toMatchObject({ isActive: false });
   });
 
   it.each([[400, "validation"], [401, "session"], [403, "forbidden"], [404, "not-found"]] as const)(
     "maps HTTP %i to %s",
     async (status, code) => {
       const request = vi.fn<typeof fetch>().mockResolvedValue(response({}, status));
-      await expect(updateUserRole(user.id, "staff", request)).rejects.toMatchObject({ code });
+      await expect(updateUserStatus(user.id, false, request)).rejects.toMatchObject({ code });
     },
   );
 
   it("rejects a successful response for a different account", async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(response({ ...user, id: "22222222-2222-4222-8222-222222222222", role: "staff" }));
-    await expect(updateUserRole(user.id, "staff", request)).rejects.toMatchObject({ code: "unexpected" });
+    const request = vi.fn<typeof fetch>().mockResolvedValue(response({ ...user, id: "22222222-2222-4222-8222-222222222222", isActive: false }));
+    await expect(updateUserStatus(user.id, false, request)).rejects.toMatchObject({ code: "unexpected" });
+  });
+
+  describe("createStaffAccount", () => {
+    const staff = { ...user, email: "lan.pham@usth.edu.vn", fullName: "Lan Pham", role: "staff" };
+    const details = { fullName: "  Lan Pham ", email: " Lan.Pham@USTH.edu.vn ", password: "initial-pass" };
+
+    it("posts normalized details with credentials and returns the staff account", async () => {
+      const request = vi.fn<typeof fetch>().mockResolvedValue(response(staff, 201));
+      await expect(createStaffAccount(details, request)).resolves.toMatchObject({ role: "staff", email: "lan.pham@usth.edu.vn" });
+      expect(request).toHaveBeenCalledWith(
+        "http://localhost:18320/api/admin/users",
+        expect.objectContaining({
+          method: "POST",
+          credentials: "include",
+          body: JSON.stringify({ email: "lan.pham@usth.edu.vn", password: "initial-pass", fullName: "Lan Pham" }),
+        }),
+      );
+    });
+
+    it.each([[400, "validation"], [401, "session"], [403, "forbidden"], [409, "duplicate"], [500, "unexpected"]] as const)(
+      "maps HTTP %i to %s",
+      async (status, code) => {
+        const request = vi.fn<typeof fetch>().mockResolvedValue(response({}, status));
+        await expect(createStaffAccount(details, request)).rejects.toMatchObject({ code });
+      },
+    );
+
+    it("maps an unreachable service to network", async () => {
+      const request = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("Failed to fetch"));
+      await expect(createStaffAccount(details, request)).rejects.toMatchObject({ code: "network" });
+    });
+
+    it("rejects a created account that is not the requested staff member", async () => {
+      const request = vi.fn<typeof fetch>().mockResolvedValue(response({ ...staff, role: "student" }, 201));
+      await expect(createStaffAccount(details, request)).rejects.toMatchObject({ code: "unexpected" });
+    });
   });
 });

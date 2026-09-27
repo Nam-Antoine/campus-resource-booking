@@ -25,6 +25,7 @@ const STATUSES: ReadonlySet<BookingStatus> = new Set([
   "no_show",
   "rejected",
   "cancelled",
+  "expired",
 ]);
 const ACTIVE_STATUSES: ReadonlySet<ActiveBookingStatus> = new Set([
   "pending",
@@ -58,8 +59,16 @@ function isAtOrAfter(left: string | null, right: string | null): boolean {
   );
 }
 
-function campusBookingEndMs(date: string, endTime: string): number {
-  return new Date(`${date}T${endTime}:00+07:00`).getTime();
+const CHECK_IN_GRACE_MS = 15 * 60 * 1000;
+
+/** A no-show is recorded no earlier than the check-in deadline, start + 15 min. */
+function isBeforeCheckInDeadline(
+  instant: string,
+  date: string,
+  startTime: string,
+): boolean {
+  const startMs = new Date(`${date}T${startTime}:00+07:00`).getTime();
+  return new Date(instant).getTime() < startMs + CHECK_IN_GRACE_MS;
 }
 
 function parseBookingResource(value: unknown): BookingResourceSummary | null {
@@ -146,6 +155,8 @@ export function parseStudentBooking(value: unknown): StudentBooking | null {
     canCancel,
     canRequestCheckIn,
     hasEnded,
+    checkInDeadline,
+    releasedAutomatically,
     checkInCode,
     checkInRequestedAt,
     checkedInAt,
@@ -173,8 +184,11 @@ export function parseStudentBooking(value: unknown): StudentBooking | null {
     typeof canCancel !== "boolean" ||
     typeof canRequestCheckIn !== "boolean" ||
     typeof hasEnded !== "boolean" ||
-    (checkInCode !== null &&
-      (typeof checkInCode !== "string" || !/^\d{6}$/.test(checkInCode))) ||
+    !isValidTimestamp(checkInDeadline) ||
+    typeof releasedAutomatically !== "boolean" ||
+    (releasedAutomatically && status !== "no_show") ||
+    (status === "expired" && (canCancel || reviewedAt !== null)) ||
+    checkInCode !== null ||
     (checkInRequestedAt !== null && !isValidTimestamp(checkInRequestedAt)) ||
     (checkedInAt !== null && !isValidTimestamp(checkedInAt)) ||
     (checkedOutAt !== null && !isValidTimestamp(checkedOutAt)) ||
@@ -193,22 +207,12 @@ export function parseStudentBooking(value: unknown): StudentBooking | null {
     (status === "rejected"
       ? canCancel || reviewedAt === null || !rejectionReason
       : rejectionReason !== null) ||
-    (checkInRequestedAt === null
-      ? checkInCode !== null ||
-        status === "checked_in" ||
-        status === "completed"
-      : status === "confirmed"
-        ? checkInCode === null
-        : !["checked_in", "completed", "no_show"].includes(status) ||
-          checkInCode !== null) ||
     (status === "checked_in"
       ? checkedInAt === null ||
-        checkInRequestedAt === null ||
         checkedOutAt !== null ||
         noShowAt !== null
       : status === "completed"
         ? checkedInAt === null ||
-          checkInRequestedAt === null ||
           checkedOutAt === null ||
           noShowAt !== null
         : status === "no_show"
@@ -217,9 +221,8 @@ export function parseStudentBooking(value: unknown): StudentBooking | null {
     !isAtOrAfter(checkedInAt, checkInRequestedAt) ||
     !isAtOrAfter(checkedOutAt, checkedInAt) ||
     (noShowAt !== null &&
-      new Date(noShowAt).getTime() < campusBookingEndMs(date, endTime)) ||
-    (canRequestCheckIn &&
-      (status !== "confirmed" || checkInRequestedAt !== null)) ||
+      isBeforeCheckInDeadline(noShowAt, date, startTime)) ||
+    canRequestCheckIn ||
     (hasEnded && (canCancel || canRequestCheckIn))
   ) {
     return null;
@@ -234,6 +237,8 @@ export function parseStudentBooking(value: unknown): StudentBooking | null {
     canCancel,
     canRequestCheckIn,
     hasEnded,
+    checkInDeadline,
+    releasedAutomatically,
     checkInCode,
     checkInRequestedAt,
     checkedInAt,
@@ -334,6 +339,8 @@ export function parseStaffBooking(value: unknown): StaffBooking | null {
     canConfirmCheckIn,
     canCheckOut,
     canMarkNoShow,
+    checkInDeadline,
+    releasedAutomatically,
     checkedInAt,
     checkedOutAt,
     noShowAt,
@@ -369,6 +376,10 @@ export function parseStaffBooking(value: unknown): StaffBooking | null {
     typeof canConfirmCheckIn !== "boolean" ||
     typeof canCheckOut !== "boolean" ||
     typeof canMarkNoShow !== "boolean" ||
+    !isValidTimestamp(checkInDeadline) ||
+    typeof releasedAutomatically !== "boolean" ||
+    (releasedAutomatically && status !== "no_show") ||
+    (status === "expired" && reviewedAt !== null) ||
     (checkedInAt !== null && !isValidTimestamp(checkedInAt)) ||
     (checkedOutAt !== null && !isValidTimestamp(checkedOutAt)) ||
     (noShowAt !== null && !isValidTimestamp(noShowAt)) ||
@@ -386,12 +397,10 @@ export function parseStaffBooking(value: unknown): StaffBooking | null {
       : rejectionReason !== null) ||
     (status === "checked_in"
       ? checkedInAt === null ||
-        !checkInRequested ||
         checkedOutAt !== null ||
         noShowAt !== null
       : status === "completed"
         ? checkedInAt === null ||
-          !checkInRequested ||
           checkedOutAt === null ||
           noShowAt !== null
         : status === "no_show"
@@ -399,9 +408,8 @@ export function parseStaffBooking(value: unknown): StaffBooking | null {
           : checkedInAt !== null || checkedOutAt !== null || noShowAt !== null) ||
     !isAtOrAfter(checkedOutAt, checkedInAt) ||
     (noShowAt !== null &&
-      new Date(noShowAt).getTime() < campusBookingEndMs(date, endTime)) ||
-    (canConfirmCheckIn &&
-      (status !== "confirmed" || !checkInRequested)) ||
+      isBeforeCheckInDeadline(noShowAt, date, startTime)) ||
+    (canConfirmCheckIn && status !== "confirmed") ||
     (canConfirmCheckIn && canMarkNoShow) ||
     (canCheckOut !== (status === "checked_in")) ||
     (canMarkNoShow && status !== "confirmed")
@@ -423,6 +431,8 @@ export function parseStaffBooking(value: unknown): StaffBooking | null {
     canConfirmCheckIn,
     canCheckOut,
     canMarkNoShow,
+    checkInDeadline,
+    releasedAutomatically,
     checkedInAt,
     checkedOutAt,
     noShowAt,

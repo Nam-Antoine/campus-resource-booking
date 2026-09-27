@@ -95,64 +95,6 @@ export async function createBookingRequest(
   }
 }
 
-export async function requestStudentCheckIn(
-  id: string,
-  request: typeof fetch = fetch,
-): Promise<StudentBooking> {
-  try {
-    const booking = parseStudentBooking(
-      await browserRequest(
-        `/bookings/mine/${id}/check-in`,
-        { method: "PATCH" },
-        request,
-      ),
-    );
-    if (
-      !booking ||
-      booking.id !== id ||
-      booking.status !== "confirmed" ||
-      !booking.checkInCode ||
-      !booking.checkInRequestedAt ||
-      booking.canRequestCheckIn
-    ) {
-      throw new BookingRequestError(
-        "unexpected",
-        "The booking service returned invalid check-in data.",
-      );
-    }
-    return booking;
-  } catch (error) {
-    if (error instanceof BookingRequestError) throw error;
-    if (error instanceof ApiError) {
-      if (error.kind === "network") {
-        throw new BookingRequestError(
-          "network",
-          "The check-in service is unreachable. Check your connection and try again.",
-        );
-      }
-      if (error.status === 401) {
-        throw new BookingRequestError(
-          "session",
-          "Your session has ended. Sign in again before checking in.",
-        );
-      }
-      if (error.status === 404) {
-        throw new BookingRequestError("not-found", "This booking no longer exists.");
-      }
-      if (error.status === 409) {
-        throw new BookingRequestError(
-          "conflict",
-          "Check-in is not available for this booking now. Refresh its details.",
-        );
-      }
-    }
-    throw new BookingRequestError(
-      "unexpected",
-      "A check-in code could not be generated. Try again.",
-    );
-  }
-}
-
 export async function cancelStudentBooking(
   id: string,
   request: typeof fetch = fetch,
