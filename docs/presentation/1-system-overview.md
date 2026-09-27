@@ -57,13 +57,13 @@ flowchart LR
 - **Approval queue**: pending requests, oldest first, each approved or rejected with a reason, until the reservation ends.
 - **Operations list**: today's bookings, plus earlier visits still waiting for check-out.
 - **Check-in**: compare the student's confirmation and identity with the staff booking record, then confirm arrival in the system. **Check-out** when the student leaves.
-- **Automatic release**: a confirmed booking not checked in by its scheduled end becomes a no-show automatically. Staff can also record the no-show once the reservation ends.
+- **Automatic release**: after the scheduled end, a periodic job records unchecked confirmed bookings as no-shows and unreviewed requests as expired. Until it runs, the booking may still hold the slot; staff can also record a no-show once the reservation ends.
 - **Resource schedule**: every booking on a resource for a chosen day.
 
 ### 🛠️ Admin
 - **Resources**: create and edit rooms, labs and equipment, including capacity, amenities, opening hours and days, and whether approval is needed. Set a resource to *active*, *maintenance* or *inactive*.
 - **Closures**: close a resource on specific dates, such as holidays or repairs.
-- **Users**: search accounts, create staff accounts with an initial password, activate or deactivate. Roles cannot be changed. A deactivated user is logged out immediately.
+- **Users**: search accounts, create staff accounts with an initial password, activate or deactivate. Roles cannot be changed. A deactivated user loses access on the next protected request, and active WebSocket connections are disconnected.
 - **Analytics** for a date range: total bookings, status breakdown, cancellation rate, most-booked resources, peak hours and utilization rate.
 
 ## A booking's life
@@ -75,10 +75,10 @@ stateDiagram-v2
     Pending --> Confirmed: staff approves
     Pending --> Rejected: staff rejects (with reason)
     Pending --> Cancelled: student cancels
-    Pending --> Expired: not reviewed by scheduled end (automatic)
+    Pending --> Expired: unreviewed after end (release job)
     Confirmed --> Cancelled: student cancels while eligible
     Confirmed --> CheckedIn: staff matches confirmation and confirms arrival
-    Confirmed --> NoShow: not checked in by scheduled end (automatic)
+    Confirmed --> NoShow: unchecked after end (staff or release job)
     CheckedIn --> Completed: staff checks out
     Rejected --> [*]
     Cancelled --> [*]
@@ -87,9 +87,9 @@ stateDiagram-v2
     Completed --> [*]
 ```
 
-A pending request that nobody approves or rejects by its scheduled end **expires**, and its time is released like a missed check-in.
+A pending request that nobody approves or rejects by its scheduled end is no longer reviewable. The release job then marks it **expired** (and marks an unchecked confirmed booking as a **no-show**). Until that update persists, it may still appear pending or confirmed and hold its slot.
 
-*Pending*, *confirmed* and *checked in* bookings **hold the slot**, so nobody else can book an overlapping time. Cancelled and rejected bookings free future time. Expiry and no-show happen at the scheduled end, so their elapsed hours cannot be rebooked.
+*Pending*, *confirmed* and *checked in* bookings **hold the slot**, so nobody else can book an overlapping time. Cancelled and rejected bookings free future time. Expiry and no-show are recorded at or after the scheduled end; those elapsed hours cannot be rebooked.
 
 ## Main flow: from search to check-in
 

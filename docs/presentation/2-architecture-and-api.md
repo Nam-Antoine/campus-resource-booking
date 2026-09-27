@@ -39,7 +39,7 @@ flowchart LR
 ```
 
 - Every route **requires login** unless it is explicitly public. Only register, login and health are public.
-- The login token is a JWT stored in an **`httpOnly` cookie**, so page JavaScript can never read or steal it.
+- The login token is a JWT stored in an **`httpOnly` cookie**, so page JavaScript cannot read the token directly. This reduces token theft from injected scripts but does not eliminate XSS or prevent malicious same-origin actions.
 - Unknown or extra input fields are **rejected**, not silently ignored.
 - Login and register have a tighter limit (10 per minute) to slow password guessing.
 
@@ -173,7 +173,7 @@ sequenceDiagram
 
 - **`availability:changed`** goes to everyone viewing that resource on that day. The student dashboard's "Today's availability" timeline also receives it for that date and refreshes.
 - **`resource:changed`** goes out when an admin edits a resource or changes its status.
-- A background job runs every minute and releases confirmed bookings that nobody checked in by the scheduled end, and expires requests nobody reviewed by then. It sends `availability:changed` so clients can refresh the final booking status; elapsed hours cannot be rebooked.
+- By default, a background job runs every minute (`BOOKING_RELEASE_INTERVAL_SECONDS`; `0` disables it). After the scheduled end it marks unchecked confirmed bookings as no-shows and unreviewed pending requests as expired. Until the update is persisted, their original statuses may still hold the slot; the job sends `availability:changed` so clients can refresh. Elapsed hours cannot be rebooked.
 - A WebSocket connection needs a valid session. It is closed when the session expires or the user is deactivated.
 
 ## Performance in one table

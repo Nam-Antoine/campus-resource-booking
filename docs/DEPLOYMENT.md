@@ -32,7 +32,7 @@ docker compose up -d --build backend frontend
 docker compose ps # postgres, backend, frontend must all be healthy
 ```
 
-Check `docker compose logs backend` for migration or startup errors and complete the [student-to-staff browser smoke flow](MVP_RELEASE.md#6-browser-smoke-matrix). The new flow uses the student's booking confirmation and a staff-only, bodyless `PATCH /staff/bookings/:id/confirm-check-in` from the scheduled start until the end of the reservation. A confirmed booking nobody checks in by its scheduled end becomes a no-show. Do not revert the manual check-in migration on a database with live check-in records: deleted codes cannot be recovered; restore from a verified pre-upgrade backup if a rollback is truly necessary.
+Check `docker compose logs backend` for migration or startup errors and complete the [student-to-staff browser smoke flow](MVP_RELEASE.md#6-browser-smoke-matrix). The new flow uses the student's booking confirmation and a staff-only, bodyless `PATCH /staff/bookings/:id/confirm-check-in` from the scheduled start up to (but not including) the reservation end. After that, staff can record a no-show, or the periodic release job records one for an unchecked confirmed booking and expires unreviewed requests; until then the earlier status may still hold the slot. Do not revert the manual check-in migration on a database with live check-in records: deleted codes cannot be recovered; restore from a verified pre-upgrade backup if a rollback is truly necessary.
 
 ## Built-in sample resources
 

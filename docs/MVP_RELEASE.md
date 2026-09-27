@@ -28,16 +28,15 @@ Use a disposable migrated PostgreSQL database:
 ```bash
 cd web-backend
 npm run migration:run
-# On this disposable database ONLY, with no check-in records, verify the
-# latest migration can be reverted. Manual check-in migration rollback may
-# still refuse if it cleared outstanding legacy codes; do not force it.
+# On this disposable database ONLY, verify the latest migration can be
+# reverted and reapplied. Do not run a rollback on live booking history.
 npm run migration:revert
 npm run migration:run
 npm run typeorm -- schema:log
 npm run test:e2e -- --runInBand
 ```
 
-Required result: TypeORM reports `Your schema is up to date` and every E2E suite passes. Review new migrations for destructive statements and verify each entity index has a migration counterpart. For an existing database, test the **forward migration on a restored copy with representative legacy check-in rows** instead of running `migration:revert` against live data. Migration `1727000000000` clears outstanding codes and intentionally refuses rollback if check-in history would become incompatible.
+Required result: TypeORM reports `Your schema is up to date` and every E2E suite passes. Review new migrations for destructive statements and verify each entity index has a migration counterpart. For an existing database, test the **forward migration on a restored copy with representative legacy check-in rows** instead of running `migration:revert` against live data. Migration `1727000000000` clears outstanding codes and intentionally refuses rollback if check-in history would become incompatible. Migration `1727100000000` retains historical early no-shows with a `NOT VALID` check constraint while enforcing the scheduled-end boundary on new writes.
 
 ## 3. API documentation review
 

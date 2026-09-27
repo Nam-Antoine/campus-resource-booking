@@ -1,6 +1,6 @@
 # Campus Resource Booking — 5-minute presentation and 5-minute Q&A
 
-> **Use this as a speaking script, not slide text.** The talk is designed for a live application demo with a short architecture slide. Rehearse it with a timer; if your demo is slow, skip optional actions rather than speaking faster. This version reflects the current code after the staff-confirmed check-in change: **there is no student-generated check-in code**.
+> **Use this as a speaking script, not slide text.** The talk is designed for a live application demo with a short architecture slide. Rehearse it with a timer; if your demo is slow, skip optional actions rather than speaking faster. This version reflects the current staff-confirmed check-in flow: **there is no student-generated check-in code**. Staff can confirm arrival from the reservation start until its scheduled end.
 
 ## 5-minute presentation script
 
@@ -18,9 +18,9 @@
 
 ### 1:35–2:25 — Staff operations (staff window)
 
-> In the staff account, the request appears in the approval queue. Staff can approve it, changing its status from pending to confirmed, or reject it with a reason. For a current confirmed booking, staff compare the student's booking details with the system record and **confirm check-in manually**. They then confirm check-out when the visit is complete. A booking that misses its check-in deadline can become a no-show, freeing its remaining time. This version does **not** use a six-digit code or QR code for check-in.
+> In the staff account, the request appears in the approval queue. Staff can approve it, changing its status from pending to confirmed, or reject it with a reason. For a current confirmed booking, the student shows their confirmation in their signed-in account. Staff compare its full booking ID, student identity, resource, and time with the live record and **confirm check-in manually**. They then confirm check-out when the visit is complete. After the scheduled end, staff can record a no-show or the periodic release job will do it and expire unreviewed pending requests. This version does **not** use a six-digit code or QR code for check-in.
 
-**Do:** Approve the pending request; if a seeded current booking is within its check-in window, show staff-confirmed check-in and check-out. Check-in is permitted from **15 minutes before** to **15 minutes after** its start. If that window is not available, show the operations screen and describe the process instead.
+**Do:** Approve the pending request. Have the student show the seeded current booking in their account, match it against the staff record, then confirm check-in and check-out. Check-in is permitted **from the scheduled start until the reservation ends**, not before. If the seeded booking has ended, show the operations screen and describe the process instead.
 
 ### 2:25–3:00 — Admin and real-time updates (admin window)
 
@@ -79,11 +79,11 @@ You will probably answer **3–5 questions**, not all of the following. Lead wit
 
 ### How does approval work? What happens to an unreviewed request?
 
-> The resource's `requiresApproval` setting determines whether a booking starts as pending or confirmed. Pending holds the slot. Staff can approve or reject it; an unreviewed request past its check-in deadline is marked expired by the release process, freeing the slot.
+> The resource's `requiresApproval` setting determines whether a booking starts as pending or confirmed. Pending holds the slot. Staff can approve or reject it until the reservation ends; an unreviewed request after that boundary is marked expired when the release job runs. Its elapsed hours cannot be booked again.
 
 ### How does check-in work now?
 
-> Staff verify the student's booking details against the system and confirm check-in manually — there is no student code or QR scan. Staff can check in a confirmed booking from 15 minutes before to 15 minutes after its start, then record check-out. If the deadline is missed, the booking can be recorded as a no-show and the remaining slot released.
+> The student shows the confirmed booking in their signed-in account. Staff compare its full booking ID, student identity, resource, and time with the live staff record and confirm check-in without a code or QR scan. Staff can check in from the scheduled start until the reservation ends, then record check-out. If nobody checks in by the end, the release process records a no-show (or staff can mark it then); elapsed hours cannot be booked again.
 
 ### Why put the JWT in an httpOnly cookie?
 

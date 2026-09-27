@@ -55,15 +55,14 @@ submission; nothing in this repository can supply them.
 | Every page the topic needs                  | Done              | 14 page routes: `/`, `/welcome`, `/login`, `/register`, `/dashboard`, `/resources`, `/resources/[id]`, `/bookings`, `/bookings/[id]`, `/staff`, `/staff/bookings/[id]`, `/admin/resources`, `/admin/users`, `/admin/analytics`, plus a 404 — see the route map in `ARCHITECTURE.md` §10 |
 | A sensible URL for each                     | Done              | Nouns and ids: `/resources/[id]`, `/bookings/[id]`, `/staff/bookings/[id]`                                                                                                                                                                                                                                       |
 | Built as components, state where it belongs | Done              | One `features/<domain>/` slice per domain; Server Components by default, `"use client"` only where state or sockets require it                                                                                                                                                                                     |
-| Data from an API                            | Done              | 35 REST endpoints; the frontend holds no hardcoded domain data                                                                                                                                                                                                                                                        |
+| Data from an API                            | Done              | REST endpoints documented in `ARCHITECTURE.md` §12; the frontend holds no hardcoded domain data                                                                                                                                                                                                                                                        |
 | All three endings rendered                  | Done              | `app/loading.tsx`, `app/error.tsx`, plus `app/not-found.tsx`; `route-state.tsx` for in-page states                                                                                                                                                                                                            |
 | README a stranger can follow                | Done              | Root `README.md`: `cp .env.example .env`, generate a secret, `docker compose up -d --build`, plus a no-Docker path                                                                                                                                                                                               |
-| Tests                                       | Beyond the brief  | 22 backend spec files, 13 e2e suites, 47 frontend test files, all wired into CI                                                                                                                                                                                                                                       |
+| Tests                                       | Beyond the brief  | Backend unit and PostgreSQL E2E suites plus frontend tests, all wired into CI; see the release gate for commands                                                                                                                                                                                                                                       |
 | Polish (bonus)                              | Done              | Live availability over WebSocket, live regions for screen readers, analytics                                                                                                                                                                                                                                          |
-| **Every member commits**              | **Not met** | `git shortlog -sne` shows one human author (20 commits) plus dependabot (6). This is explicitly graded — see §8                                                                                                                                                                                                   |
+| **Every member commits**              | **Verify before submission** | Multiple human author identities appear in the `main` commit history; confirm each group member contributed before submission — see §8                                                                                                                                                                                                   |
 
-Everything on the list is met except the commit history. Fix that first; it is
-the only item that cannot be fixed on presentation day.
+Confirm the final submission meets the course's per-member commit requirement; the presence of multiple author identities alone does not establish that every group member contributed.
 
 ---
 
@@ -76,7 +75,7 @@ the spelling changed.** Be ready to point at the line.
 | The course taught                                         | Where it is in this project                                                          |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `@app.get("/api/menu/<id>")`                            | `@Get(':id')` on a Nest controller                                                 |
-| `jsonify` vs `render_template`                        | A response DTO for `/api/*`, a React Server Component for a page                    |
+| `jsonify` vs `render_template`                        | Response DTOs for `/api/*`, React Server Components for page data                    |
 | `error()` helper, one error shape                       | `BookingDomainError` codes mapped once per code in the controller                  |
 | Status codes decided in a table                           | The refusal table in `ARCHITECTURE.md` §3                                          |
 | `schema.sql` with `CHECK`, `REFERENCES`, `UNIQUE` | TypeORM entities plus versioned PostgreSQL migrations; constraints remain in the database             |
@@ -110,7 +109,7 @@ error shape, three endings — in a framework that spells them differently."*
 | 5     | Components, props, state, routing, consuming REST                 | `features/` slices, App Router, three-ending rendering                                   |
 | 6     | Routes, request handling, page vs data, status codes              | Controllers, DTOs, the refusal table                                                       |
 | 7     | Relational vs document, schema design, CRUD                       | Five tables, versioned migrations, constraints in the schema — `ARCHITECTURE.md` §9            |
-| 8     | RESTful design, validation, testing endpoints                     | 35 endpoints, `ValidationPipe` with whitelisting, e2e suites per feature                  |
+| 8     | RESTful design, validation, testing endpoints                     | Documented REST endpoints, `ValidationPipe` with whitelisting, e2e suites per feature                  |
 | 9     | Session vs token auth, password storage, OWASP, reviewing AI code | `httpOnly` JWT cookie, bcrypt, global guards, §7 of this document                       |
 | 10    | Env vars and the build, HTTPS, CI, scaling out                    | Joi config, `AUTH_COOKIE_SECURE` in production, CI, and the honest answer in §6          |
 
@@ -140,7 +139,7 @@ The lecture decks state their own answers to most of these. Use theirs.
 | *You store passwords hashed with SHA-256 and a salt. What is still wrong?* | Speed. A salt defeats precomputed tables; it does not slow a guess down. You need a cost factor — bcrypt, which is what we use.                                                                                                       |
 | *Why must both login failures look identical?*                             | Otherwise it is a username oracle: one loop tells an attacker which accounts exist before guessing a single password. Ours return the same status and the same body.                                                                   |
 | *A JWT holds a user id. Is that private?*                                  | No. Base64 is encoding, not encryption; anyone holding the token reads the payload. Signed means tamper-evident. Ours carries no secrets, and the browser cannot read it anyway — it is `httpOnly`.                                  |
-| *Where is the state? What is not stateless?*                               | The session is a signed cookie, so any backend process can serve any REST request.**Socket.IO rooms are in-process** — a second replica would need a Redis adapter. That is the honest answer, and it is the right one to give. |
+| *Where is the state? What is not stateless?*                               | The JWT is signed and stored in a cookie, so any backend process with the same signing key and database can serve a REST request. **Socket.IO rooms are in-process** — a second replica would need a Redis adapter. That is the honest answer, and it is the right one to give. |
 | *What happens with no `AUTH_JWT_SECRET`?*                                | The app refuses to boot. Joi requires it, 32 characters minimum; there is no fallback default.                                                                                                                                         |
 | *Why not put the availability check in the service layer?*                 | The service locks the resource row and turns a clash into a clear `BOOKING_OVERLAP` error, but the guarantee is a GiST exclusion constraint in PostgreSQL. A rule in the schema cannot be forgotten by a route, a colleague, or a Tuesday.                                           |
 | *Show the three endings.*                                                  | Turn off the backend and reload `/resources`. `loading.tsx`, then `error.tsx`. Turn it back on for the data.                                                                                                                      |
@@ -172,9 +171,9 @@ produced it."*
 
 Ordered by how hard each is to fix late.
 
-1. **Spread the commit history.** Today it is one human author. The brief grades
-   the history: every member should land real, small, described commits. Nothing
-   can repair this after the deadline — start now.
+1. **Verify the commit history.** Multiple human authors now appear on `main`,
+   but the brief grades contributions from *every* member. Confirm each member
+   has landed real, small, described commits before the deadline.
 2. **Get the three placeholders** from the class page: the fork target, the
    deadline, and the assigned topic. Confirm that "campus resource booking" is
    in fact our assigned topic before presenting it.

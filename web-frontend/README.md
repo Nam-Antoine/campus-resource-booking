@@ -22,7 +22,7 @@ Open http://localhost:18321. To run everything in Docker instead, see the [root 
 
 ## Booking confirmation and arrival
 
-A confirmed booking appears under **My bookings → View details** with the student's name, university email, full booking ID, resource, location, date, and time. A pending request is not a confirmation; wait for staff approval first. The student shows the confirmation in their signed-in account at the resource. Staff compare those details with their own live booking record and use **Confirm check-in** in the staff view. There is no check-in code and the student cannot check themselves in. Staff can confirm from the reservation start until its scheduled end. A booking not checked in by then is recorded as a no-show; staff then record checkout for checked-in visits.
+A confirmed booking appears under **My bookings → View details** with the student's name, university email, full booking ID, resource, location, date, and time. A pending request is not a confirmation; wait for staff approval first. The student shows the confirmation in their signed-in account at the resource. Staff compare those details with their own live booking record and use **Confirm check-in** in the staff view. There is no check-in code and the student cannot check themselves in. Staff can confirm from the reservation start up to (but not including) its scheduled end. After that, an unchecked booking becomes a no-show when staff record it or the periodic release job runs; until then it can still appear confirmed. Staff record checkout for checked-in visits.
 
 ## Code layout
 

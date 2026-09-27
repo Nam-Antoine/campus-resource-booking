@@ -183,10 +183,10 @@ stateDiagram-v2
     pending --> confirmed: staff approve
     pending --> rejected: staff reject with reason
     pending --> cancelled: student cancel
-    pending --> expired: not reviewed by scheduled end
+    pending --> expired: unreviewed after end; release job
 
     confirmed --> checked_in: staff match confirmation and record arrival
-    confirmed --> no_show: not checked in by scheduled end
+    confirmed --> no_show: unchecked after end; staff or release job
     confirmed --> cancelled: student cancel while eligible
 
     checked_in --> completed: staff check out
@@ -236,14 +236,16 @@ sequenceDiagram
     API-->>T: status completed
 ```
 
-Check-in opens at the scheduled start and closes at the reservation end, as does
-the review window for a pending request. At that deadline
-`BookingReleaseScheduler` closes unused bookings: it runs
+Check-in opens at the scheduled start and closes at the reservation end
+(the end instant is excluded), as does the review window for a pending request.
+After that deadline `BookingReleaseScheduler` closes unused bookings: it runs
 `releaseMissedDeadlines()` every `BOOKING_RELEASE_INTERVAL_SECONDS` (60 by
 default), which marks a confirmed booking staff have not checked in as
 `no_show` with no staff actor, and a request nobody reviewed as `expired`.
 Showing the confirmation without staff recording arrival does not prevent a
-no-show. Staff can also record a no-show from the scheduled end. The update is
+no-show. Until the scheduled update is persisted, an overdue booking can remain
+confirmed or pending and may still hold the slot. Staff can also record a no-show
+from the scheduled end. The update is
 idempotent, so several API processes running it is harmless. Analytics excludes
 automatically released no-shows from demand figures.
 
@@ -708,10 +710,11 @@ docker compose exec backend node dist/scripts/catalog-import.js
 
 CI (`.github/workflows/ci.yml`) runs a frontend job (lint, typecheck, vitest,
 `next build`), a backend job (lint, unit tests, build), a backend E2E job
-against a PostgreSQL service container, and CodeQL. The E2E job also asserts the
-newest migration is **reversible** — it runs `migration:revert` and then
-`migration:run` again, so an irreversible `down()` fails CI rather than
-surfacing during a rollback.
+against a PostgreSQL service container, and CodeQL. The E2E job also checks the
+**latest migration** can be reverted and reapplied on its disposable database — it
+runs `migration:revert` and then `migration:run` again. Earlier lifecycle
+migrations may refuse rollback when live history would be lost. A broken
+latest `down()` fails CI rather than surfacing during a rollback.
 
 ### Related documents
 

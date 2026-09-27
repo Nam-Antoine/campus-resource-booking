@@ -148,7 +148,7 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 │ │ Student · booking ID · resource · building · date and time │ │
 │ └─────────────────────────────────────────────────────────────┘ │
 │ [Cancel booking] (while eligible)                               │
-│ Not checked in by reservation end → recorded as no-show         │
+│ If no check-in by end → no-show once staff/job records it       │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -167,7 +167,8 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 │ [Arrival ready for staff]      │ Oldest request first          │
 │   Lab L201 09:00 Open visit →  │ 1. Room B204 · Tue 14:00      │
 │ [Ready for checkout]           │    Review request →           │
-│ [Check-in missed]              │ 2. Lab L305 · Wed 08:00       │
+│ [Check-in missed; awaiting     │ 2. Lab L305 · Wed 08:00       │
+│  no-show record]               │                               │
 └────────────────────────────────┴───────────────────────────────┘
 ```
 
