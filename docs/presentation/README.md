@@ -10,28 +10,48 @@ Material for a 5-minute presentation of Campus Resource Booking. The diagrams ar
 
 ## 5-minute talk plan
 
-About 7 slides at 30–60 seconds each. The quotes are suggested wording; shorten as needed.
+The course asks for the app running live, not a video of it, so the talk is mostly a demo with a minute of slides. Keep one person driving and one narrating, and don't pass the laptop. The quotes are suggested wording; five minutes is about 700 spoken words.
 
-| # | Time | Slide | Show | Say |
-| --- | --- | --- | --- | --- |
-| 1 | 0:00–0:30 | **Title and problem** | Name, team, one campus photo or screenshot | "Booking rooms and labs at USTH by message or on paper leads to double bookings and lost requests. We built one system where students book, staff approve, and admins see the usage." |
-| 2 | 0:30–1:15 | **Roles and use cases** | Use-case diagram ([1](1-system-overview.md#use-cases)) | "There are three roles. Students search, book and check in. Staff approve and run check-in and check-out. Admins manage resources and users, and read the analytics." |
-| 3 | 1:15–2:00 | **Features by role** | Booking lifecycle diagram ([1](1-system-overview.md#a-bookings-life)) | "A booking is confirmed right away, or waits for staff approval. The student gets a 6-digit code 15 minutes before the start; staff confirm it, then check the student out." |
-| 4 | 2:00–3:00 | **Demo or screens** | Live demo, or wireframes ([3](3-screens.md)) | Search for a free lab → book it → staff approve → the student refreshes "My bookings" and sees Confirmed. Keep a second browser open on the same resource and day: the booked hour disappears from its grid without a refresh. |
-| 5 | 3:00–3:45 | **Architecture and API** | Architecture diagram and the request pipeline ([2](2-architecture-and-api.md)) | "Next.js front end, NestJS API, PostgreSQL, all in Docker Compose. Every request passes rate limiting, a login check, a role check and input validation." |
-| 6 | 3:45–4:40 | **Technical highlights** | "More than CRUD" table ([1](1-system-overview.md#what-makes-it-more-than-a-crud-app)) and the performance table ([2](2-architecture-and-api.md#performance-in-one-table)) | "When 100 students book the same slot at once, exactly one succeeds; the database guarantees it. Indexes make search about 1.7× faster, WebSockets keep availability live, and the API handled 800 simultaneous users without an error." |
-| 7 | 4:40–5:00 | **Wrap-up** | Three bullets: complete for all 3 roles · safe under concurrency · measured performance | "Thank you. Questions?" |
+| # | Time | On screen | Say and do |
+| --- | --- | --- | --- |
+| 1 | 0:00–0:30 | Landing page `/` | "Booking a room or lab at USTH means messages and spreadsheets. Two people book the same room and nobody finds out until both are standing in it. We built one system where students book, staff approve, and admins see the usage." |
+| 2 | 0:30–1:30 | **Student** window: `/resources`, filter to laboratories, open *Demo Teaching Laboratory*. **Staff** window: the same lab on the same date. | Show the filters, then the grid: "it lists only the free hours, worked out from the opening hours, closures and existing bookings." Book an hour as the student. It goes to *pending*, because **approval is set per resource, not per person**. The hour disappears from the staff window without a refresh. |
+| 3 | 1:30–2:15 | Staff: `/staff`, open the new request | Approve it. The student refreshes "My bookings" and sees *Confirmed*. With time to spare, reject the seeded pending request with a reason; the student sees that reason. |
+| 4 | 2:15–3:00 | Student: today's *Demo Portable Projector* booking. Staff: the same booking from the operations list | The student generates the 6-digit check-in code. Staff enter it: *Checked in*. Then *Confirm check-out*: *Completed*. "Two-sided on purpose: neither side can fake attendance alone." |
+| 5 | 3:00–3:30 | **Admin** window: `/admin/analytics`, then `/admin/resources` | Utilization, peak hours, most-booked resources. Resources, opening hours, closures and the approval rule are all set here. |
+| 6 | 3:30–4:30 | Slides: the architecture diagram ([2](2-architecture-and-api.md#the-big-picture)), the "More than CRUD" table ([1](1-system-overview.md#what-makes-it-more-than-a-crud-app)) and the performance table ([2](2-architecture-and-api.md#performance-in-one-table)) | "Next.js, NestJS and PostgreSQL in Docker Compose. Every request passes rate limiting, a login check, a role check and input validation. Double booking is impossible, and not because of an `if`: a PostgreSQL exclusion constraint refuses overlapping bookings. We sent 100 bookings for the same slot at once, 20 times; exactly one won each time. One API process handles about 250 requests per second, with 0 errors up to 800 simultaneous users." |
+| 7 | 4:30–5:00 | The green CI run, then the wrap-up | "Lint, type checks, unit tests, end-to-end tests against a real PostgreSQL, and a check that migrations roll back. Thank you. Questions?" |
+
+Rules for the run-through:
+
+- **Rehearse twice against a freshly rebuilt stack.** Stale containers have caused demo failures before.
+- If a step fails, say its sentence, show the matching diagram or wireframe, and move to the next row. Don't debug on stage.
+- Animations are a bonus. Don't spend any of the five minutes on them.
 
 ## Preparing the live demo
 
-1. Start everything with `docker compose up -d --build` (see the [root README](../../README.md)).
-2. Set the admin and staff accounts in `.env` (`BOOTSTRAP_ADMIN_*`, `BOOTSTRAP_STAFF_*`) before starting.
-3. Load demo rooms, labs and equipment: `docker compose exec backend node dist/scripts/catalog-import.js`.
-4. Register one student account beforehand, and pick a resource that **requires approval**, so the staff step shows.
-5. Keep two browser windows side by side, one normal and one private, both on the same resource and day, to show the live update.
-6. Fallback if the demo fails: the wireframes in [3-screens.md](3-screens.md) and the sequence diagram in [1-system-overview.md](1-system-overview.md#main-flow-from-search-to-check-in).
+1. Rebuild and check that every service is healthy:
+   ```bash
+   docker compose up -d --build   # never present a stale build
+   docker compose ps              # every service "healthy"
+   ```
+2. Optional: load the larger demo catalog (42 resources in 6 buildings) so search looks realistic:
+   ```bash
+   docker compose exec backend node dist/scripts/catalog-import.js
+   ```
+3. **Within the hour before the talk**, seed the demo data. The check-in booking it creates is for the current hour, so seeding earlier makes row 4 fail. Details, including the database settings it needs, are in [MVP_RELEASE.md §5](../MVP_RELEASE.md#5-demo-data).
+   ```bash
+   cd web-backend
+   set -a; . ./.env; set +a
+   DEMO_PASSWORD='choose-a-local-demo-password' npm run demo:seed
+   ```
+   It creates the `demo.student`, `demo.staff` and `demo.admin` accounts (all `@usth.edu.vn`, password from `DEMO_PASSWORD`), *Demo Teaching Laboratory* (needs approval), a pending request, and a confirmed *Demo Portable Projector* booking for the current hour. Rerunning it resets them, and `npm run demo:clean` removes them afterwards. You can use the `BOOTSTRAP_*` accounts from `.env` for staff and admin instead.
+4. Sign in three sessions, **each in its own browser profile or private window**. The session is a single cookie per profile, so tabs of the same window would share one login. Put the student and staff windows side by side for row 2.
+5. Screenshot every step. The brief wants the app running, so screenshots are only insurance. Other fallbacks: the wireframes in [3-screens.md](3-screens.md) and the sequence diagram in [1-system-overview.md](1-system-overview.md#main-flow-from-search-to-check-in).
 
 ## Likely questions
+
+Security questions drawn from the course lectures, with answers, are in [COURSE_PROJECT.md §6](../COURSE_PROJECT.md#6-questions-to-expect-and-the-answer).
 
 - **How do you stop double booking?** The API locks the resource row while booking. PostgreSQL also has an *exclusion constraint* that refuses any two slot-holding bookings that overlap on the same resource, so it holds even if the code had a bug.
 - **Why a cookie instead of storing the token in the browser?** An `httpOnly` cookie cannot be read by JavaScript, so an injected script cannot steal the session.
