@@ -64,22 +64,38 @@ export class ResourcesService {
   async discover(
     query: DiscoverResourcesQueryDto,
   ): Promise<[Resource[], number]> {
-    if (query.date && query.startTime && query.endTime) {
-      this.requireValidInterval(query.date, query.startTime, query.endTime);
-      if (!isFutureCampusTime(query.date, query.startTime, this.clock())) {
-        return [[], 0];
+    const now = this.clock();
+    let todayStartTime: string | undefined;
+    if (query.date) {
+      this.requireValidDate(query.date);
+      if (query.startTime && query.endTime) {
+        this.requireValidInterval(query.date, query.startTime, query.endTime);
+        if (!isFutureCampusTime(query.date, query.startTime, now)) {
+          return [[], 0];
+        }
+      } else {
+        // Full-day results cannot include an operating day already underway.
+        const today = campusDateOf(now);
+        if (query.date < today) return [[], 0];
+        if (query.date === today) todayStartTime = campusTimeOf(now);
       }
     }
 
     return this.resourcesRepository.manager.transaction(
       'REPEATABLE READ',
-      (manager) => this.discoverFrom(manager.getRepository(Resource), query),
+      (manager) =>
+        this.discoverFrom(
+          manager.getRepository(Resource),
+          query,
+          todayStartTime,
+        ),
     );
   }
 
   private discoverFrom(
     repository: Repository<Resource>,
     query: DiscoverResourcesQueryDto,
+    todayStartTime?: string,
   ): Promise<[Resource[], number]> {
     const builder = repository
       .createQueryBuilder('resource')
@@ -110,14 +126,27 @@ export class ResourcesService {
         amenity: query.amenity,
       });
     }
-    if (query.date && query.startTime && query.endTime) {
+    if (query.date) {
       const dayOfWeek = this.dayOfWeekFor(query.date);
+      const isInterval = Boolean(query.startTime && query.endTime);
+      builder.andWhere(':dayOfWeek = ANY(resource.operatingDays)', {
+        dayOfWeek,
+      });
+      if (todayStartTime) {
+        builder.andWhere('resource.opensAt > :todayStartTime', {
+          todayStartTime,
+        });
+      }
+      if (isInterval) {
+        builder
+          .andWhere('resource.opensAt <= :startTime', {
+            startTime: query.startTime,
+          })
+          .andWhere('resource.closesAt >= :endTime', {
+            endTime: query.endTime,
+          });
+      }
       builder
-        .andWhere(':dayOfWeek = ANY(resource.operatingDays)', { dayOfWeek })
-        .andWhere('resource.opensAt <= :startTime', {
-          startTime: query.startTime,
-        })
-        .andWhere('resource.closesAt >= :endTime', { endTime: query.endTime })
         .andWhere(
           `NOT EXISTS (
             SELECT 1 FROM resource_closures closure
@@ -132,10 +161,13 @@ export class ResourcesService {
             WHERE booking.resource_id = resource.id
               AND booking.booking_date = :availabilityDate
               AND booking.status IN (:...blockingStatuses)
-              AND booking.start_time < :endTime
-              AND booking.end_time > :startTime
+              ${isInterval ? 'AND booking.start_time < :endTime AND booking.end_time > :startTime' : ''}
           )`,
           {
+            ...(isInterval && {
+              endTime: query.endTime,
+              startTime: query.startTime,
+            }),
             blockingStatuses: [
               BookingStatus.PENDING,
               BookingStatus.CONFIRMED,

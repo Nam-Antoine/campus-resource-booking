@@ -904,17 +904,20 @@ describe('Booking requests (e2e)', () => {
       ]),
     );
 
-    const directory = await api()
-      .get(
-        `/api/resources?date=${AVAILABILITY_DATE}&startTime=09:00&endTime=10:00`,
-      )
-      .set('Cookie', studentTwoCookie)
-      .expect(200);
-    expect(
-      directory.body.items.some(
-        (item: { id: string }) => item.id === noApprovalResourceId,
-      ),
-    ).toBe(false);
+    for (const query of [
+      `date=${AVAILABILITY_DATE}&startTime=09:00&endTime=10:00`,
+      `date=${AVAILABILITY_DATE}`,
+    ]) {
+      const directory = await api()
+        .get(`/api/resources?${query}`)
+        .set('Cookie', studentTwoCookie)
+        .expect(200);
+      expect(
+        directory.body.items.some(
+          (item: { id: string }) => item.id === noApprovalResourceId,
+        ),
+      ).toBe(false);
+    }
   });
 
   it('enforces booking shape and overlap directly in PostgreSQL', async () => {

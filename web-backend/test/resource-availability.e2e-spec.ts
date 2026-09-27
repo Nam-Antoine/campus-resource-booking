@@ -232,11 +232,49 @@ describe('Resource availability (e2e)', () => {
     expect(closed.body.total).toBe(0);
   });
 
+  it('finds resources free for the entire operating day with date only', async () => {
+    const fullDay = await api()
+      .get(`/api/resources?date=${OPEN_DATE}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(fullDay.body.total).toBe(3);
+
+    const closed = await api()
+      .get(`/api/resources?date=${CLOSED_DAY}`)
+      .set('Cookie', studentCookie)
+      .expect(200);
+    expect(closed.body.total).toBe(0);
+
+    const closure = await api()
+      .post(`/api/admin/resources/${ROOM_A101_ID}/closures`)
+      .set('Cookie', adminCookie)
+      .send({ date: CLOSURE_DATE, reason: 'Full-day search test' })
+      .expect(201);
+    try {
+      const closedForClosure = await api()
+        .get(`/api/resources?date=${CLOSURE_DATE}`)
+        .set('Cookie', studentCookie)
+        .expect(200);
+      expect(
+        closedForClosure.body.items.map((item: { id: string }) => item.id),
+      ).not.toContain(ROOM_A101_ID);
+    } finally {
+      await api()
+        .delete(
+          `/api/admin/resources/${ROOM_A101_ID}/closures/${closure.body.id as string}`,
+        )
+        .set('Cookie', adminCookie)
+        .expect(204);
+    }
+  });
+
   it.each([
     `/api/resources/${ROOM_A101_ID}/availability?date=2026-02-30`,
     `/api/resources/${ROOM_A101_ID}/availability?date=not-a-date`,
     `/api/resources/${ROOM_A101_ID}/availability?date=${OPEN_DATE}&unknown=x`,
-    `/api/resources?date=${OPEN_DATE}`,
+    `/api/resources?startTime=09:00&endTime=11:00`,
+    `/api/resources?date=${OPEN_DATE}&startTime=09:00`,
+    `/api/resources?date=${OPEN_DATE}&endTime=11:00`,
     `/api/resources?date=${OPEN_DATE}&startTime=11:00&endTime=10:00`,
     `/api/resources?date=2026-02-30&startTime=09:00&endTime=10:00`,
     `/api/resources?q=room%00hidden`,

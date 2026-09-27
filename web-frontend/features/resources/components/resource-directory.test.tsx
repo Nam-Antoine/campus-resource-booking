@@ -122,7 +122,7 @@ describe("ResourceDirectory", () => {
     expect(within(labCard).getByText("Staff approval")).toBeVisible();
   });
 
-  it("requires a complete ordered availability interval with supported bounds", () => {
+  it("accepts a date with both times set to Any, but requires paired interval times", () => {
     render(
       <ResourceDirectory
         user={user}
@@ -141,11 +141,16 @@ describe("ResourceDirectory", () => {
     expect(within(end).getByRole("option", { name: "23:00" })).toBeVisible();
 
     fireEvent.change(date, { target: { value: "2026-09-15" } });
-    expect(date).toBeRequired();
-    expect(start).toBeRequired();
-    expect(end).toBeRequired();
+    expect(date).not.toBeRequired();
+    expect(start).not.toBeRequired();
+    expect(end).not.toBeRequired();
+    expect(start).not.toHaveAttribute("name");
+    expect(end).not.toHaveAttribute("name");
 
     fireEvent.change(start, { target: { value: "22:00" } });
+    expect(date).toBeRequired();
+    expect(end).toBeRequired();
+    expect(start).toHaveAttribute("name", "startTime");
     fireEvent.change(end, { target: { value: "21:00" } });
     expect(end).toHaveAttribute("aria-invalid", "true");
     expect((end as HTMLSelectElement).validationMessage).toBe(
@@ -155,6 +160,33 @@ describe("ResourceDirectory", () => {
     fireEvent.change(end, { target: { value: "23:00" } });
     expect(end).not.toHaveAttribute("aria-invalid");
     expect((end as HTMLSelectElement).validationMessage).toBe("");
+
+    fireEvent.change(start, { target: { value: "" } });
+    expect(start).toBeRequired();
+    expect(date).toBeRequired();
+    fireEvent.change(end, { target: { value: "" } });
+    expect(start).not.toBeRequired();
+    expect(date).not.toBeRequired();
+  });
+
+  it("links date-only results to the full-day slot schedule", () => {
+    render(
+      <ResourceDirectory
+        user={user}
+        page={page({ page: 1 })}
+        buildings={[building]}
+        filters={{ date: "2099-01-05" }}
+      />,
+    );
+
+    expect(screen.getByLabelText("Operational date")).toHaveValue("2099-01-05");
+    expect(screen.getByLabelText("From")).toHaveValue("");
+    expect(screen.getByLabelText("Until")).toHaveValue("");
+    expect(screen.getByRole("link", { name: "Clear 1 filter" })).toBeVisible();
+    const roomCard = screen.getByText("Study Room A101").closest("article")!;
+    expect(
+      within(roomCard).getByRole("link", { name: "View resource details" }),
+    ).toHaveAttribute("href", `/resources/${room.id}?date=2099-01-05`);
   });
 
   it("resets interval controls when normalized URL filters change", () => {
@@ -189,6 +221,18 @@ describe("ResourceDirectory", () => {
     expect(screen.getByLabelText("Operational date")).toHaveValue("");
     expect(screen.getByLabelText("From")).toHaveValue("");
     expect(screen.getByLabelText("Until")).toHaveValue("");
+  });
+
+  it("suggests a narrower time search when no resources are free all day", () => {
+    render(
+      <ResourceDirectory
+        user={user}
+        page={page({ items: [], total: 0, page: 1, totalPages: 0 })}
+        buildings={[building]}
+        filters={{ date: "2099-01-05" }}
+      />,
+    );
+    expect(screen.getByText(/select a shorter interval/i)).toBeVisible();
   });
 
   it("labels interval results as booking-aware", () => {

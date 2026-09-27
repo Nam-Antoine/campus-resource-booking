@@ -639,7 +639,7 @@ Relative to `http://localhost:18320/api`. Swagger UI: `/api/docs`.
 | `POST`   | `/auth/login`                                    | public, strict limit | Exchange credentials for a cookie         |
 | `POST`   | `/auth/logout`                                   | authenticated        | Clear the cookie                          |
 | `GET`    | `/auth/me`                                       | authenticated        | Current user                              |
-| `GET`    | `/resources`                                     | authenticated        | Discover active resources                 |
+| `GET`    | `/resources`                                     | authenticated        | Discover active resources; date alone finds resources free for their entire operating day (only if it has not started), while date + startTime + endTime searches a specific interval |
 | `GET`    | `/resources/buildings`                           | authenticated        | Buildings for filters                     |
 | `GET`    | `/resources/:id`                                 | authenticated        | One active resource                       |
 | `GET`    | `/resources/:id/availability`                    | authenticated        | Bookable slots for a date                 |

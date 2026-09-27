@@ -24,10 +24,7 @@ export function AvailabilityFilterFields({
   const [date, setDate] = useState(filters.date ?? "");
   const [startTime, setStartTime] = useState(filters.startTime ?? "");
   const [endTime, setEndTime] = useState(filters.endTime ?? "");
-  const intervalStarted = Boolean(date || startTime || endTime);
-  const invalidOrder = Boolean(
-    startTime && endTime && startTime >= endTime,
-  );
+  const invalidOrder = Boolean(startTime && endTime && startTime >= endTime);
 
   return (
     <>
@@ -37,7 +34,7 @@ export function AvailabilityFilterFields({
           name="date"
           type="date"
           value={date}
-          required={intervalStarted}
+          required={Boolean(startTime || endTime)}
           aria-describedby="availability-filter-hint"
           onChange={(event) => setDate(event.target.value)}
         />
@@ -46,9 +43,9 @@ export function AvailabilityFilterFields({
       <label>
         <span>From</span>
         <select
-          name="startTime"
+          name={startTime ? "startTime" : undefined}
           value={startTime}
-          required={intervalStarted}
+          required={Boolean(endTime)}
           aria-describedby="availability-filter-hint"
           onChange={(event) => setStartTime(event.target.value)}
         >
@@ -64,9 +61,9 @@ export function AvailabilityFilterFields({
       <label>
         <span>Until</span>
         <select
-          name="endTime"
+          name={endTime ? "endTime" : undefined}
           value={endTime}
-          required={intervalStarted}
+          required={Boolean(startTime)}
           aria-invalid={invalidOrder || undefined}
           aria-describedby="availability-filter-hint"
           onChange={(event) => setEndTime(event.target.value)}
@@ -86,8 +83,10 @@ export function AvailabilityFilterFields({
       </label>
 
       <p className={styles.availabilityHint} id="availability-filter-hint">
-        Optional. If used, complete date, from, and until. Until must be after
-        From. Times use ICT (UTC+7). Results exclude closures and intervals
+        Choose a date with Any start and Any end to find resources free for
+        their entire operating day (only if it has not started). To search a
+        specific interval, choose both From and Until; Until must be after
+        From. Times use ICT (UTC+7). Results exclude closures and times
         occupied by pending, confirmed, or checked-in bookings.
       </p>
     </>

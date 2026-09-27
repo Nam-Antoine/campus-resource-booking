@@ -52,6 +52,23 @@ describe("resource discovery query", () => {
     ).toEqual({});
   });
 
+  it("normalizes a date-only full-day search and preserves it in API/navigation links", () => {
+    const filters = normalizeDiscoveryFilters({
+      date: "2099-01-05",
+      startTime: "",
+      endTime: "",
+      type: "room",
+    });
+    expect(filters).toEqual({ date: "2099-01-05", type: "room" });
+    expect(discoverySearchParams(filters).toString()).toBe(
+      "type=room&date=2099-01-05",
+    );
+    expect(discoveryHref(filters, { page: 2 })).toBe(
+      "/resources?type=room&date=2099-01-05&page=2",
+    );
+    expect(normalizeDiscoveryFilters({ date: "2099-01-05", startTime: "09:00" })).toEqual({});
+  });
+
   it("builds deterministic API and navigation parameters", () => {
     const filters = {
       q: "study room",

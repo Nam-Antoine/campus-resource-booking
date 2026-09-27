@@ -64,7 +64,8 @@ export class DiscoverResourcesQueryDto {
 
   @ApiPropertyOptional({
     example: '2026-09-15',
-    description: 'Campus-local date; requires startTime and endTime',
+    description:
+      'Campus-local date; alone finds resources free for their entire operating day',
   })
   @ValidateIf(
     (query: DiscoverResourcesQueryDto) =>
@@ -83,9 +84,7 @@ export class DiscoverResourcesQueryDto {
   })
   @ValidateIf(
     (query: DiscoverResourcesQueryDto) =>
-      query.date !== undefined ||
-      query.startTime !== undefined ||
-      query.endTime !== undefined,
+      query.startTime !== undefined || query.endTime !== undefined,
   )
   @IsDefined()
   @Matches(HOUR_PATTERN)
@@ -97,9 +96,7 @@ export class DiscoverResourcesQueryDto {
   })
   @ValidateIf(
     (query: DiscoverResourcesQueryDto) =>
-      query.date !== undefined ||
-      query.startTime !== undefined ||
-      query.endTime !== undefined,
+      query.startTime !== undefined || query.endTime !== undefined,
   )
   @IsDefined()
   @Matches(HOUR_PATTERN)

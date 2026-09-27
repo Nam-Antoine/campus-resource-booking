@@ -231,8 +231,11 @@ export function ResourceDirectory({
               <div>
                 <h3>No active resources match these filters</h3>
                 <p>
-                  Try a broader capacity, another building, or remove the
-                  amenity filter.
+                  {filters.date
+                    ? filters.startTime
+                      ? "Try a different date, a shorter interval, or fewer filters."
+                      : "Try a different date, select a shorter interval, or remove another filter."
+                    : "Try a broader capacity, another building, or remove the amenity filter."}
                 </p>
               </div>
               <Link href="/resources">View all resources</Link>

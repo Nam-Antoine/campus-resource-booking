@@ -84,18 +84,20 @@ export function normalizeDiscoveryFilters(
   }
   if (minCapacity !== undefined) filters.minCapacity = minCapacity;
   if (amenity) filters.amenity = amenity;
-  if (
-    date &&
-    isCalendarDate(date) &&
-    startTime &&
-    HOUR_PATTERN.test(startTime) &&
-    endTime &&
-    HOUR_PATTERN.test(endTime) &&
-    startTime < endTime
-  ) {
-    filters.date = date;
-    filters.startTime = startTime;
-    filters.endTime = endTime;
+  if (date && isCalendarDate(date)) {
+    if (!startTime && !endTime) {
+      filters.date = date;
+    } else if (
+      startTime &&
+      HOUR_PATTERN.test(startTime) &&
+      endTime &&
+      HOUR_PATTERN.test(endTime) &&
+      startTime < endTime
+    ) {
+      filters.date = date;
+      filters.startTime = startTime;
+      filters.endTime = endTime;
+    }
   }
   if (sort && RESOURCE_SORTS.has(sort as ResourceSort)) {
     filters.sort = sort as ResourceSort;
@@ -119,10 +121,12 @@ export function discoverySearchParams(
     params.set("minCapacity", String(merged.minCapacity));
   }
   if (merged.amenity) params.set("amenity", merged.amenity);
-  if (merged.date && merged.startTime && merged.endTime) {
+  if (merged.date) {
     params.set("date", merged.date);
-    params.set("startTime", merged.startTime);
-    params.set("endTime", merged.endTime);
+    if (merged.startTime && merged.endTime) {
+      params.set("startTime", merged.startTime);
+      params.set("endTime", merged.endTime);
+    }
   }
   if (merged.sort && merged.sort !== "name_asc") {
     params.set("sort", merged.sort);

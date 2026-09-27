@@ -277,6 +277,78 @@ describe('ResourcesService', () => {
     expect(resourcesRepository.manager.transaction).not.toHaveBeenCalled();
   });
 
+  it('limits full-day searches for today to resources not yet open', async () => {
+    const todayService = new ResourcesService(
+      resourcesRepository as unknown as Repository<Resource>,
+      buildingsRepository as unknown as Repository<Building>,
+      closuresRepository as unknown as Repository<ResourceClosure>,
+      bookingsRepository as unknown as Repository<Booking>,
+      () => new Date('2026-09-15T03:00:00.000Z'),
+      {
+        notifyAvailabilityChanged: jest.fn(),
+        notifyResourceChanged: jest.fn(),
+      } as never,
+    );
+    await todayService.discover({
+      date: '2026-09-15',
+      sort: ResourceSort.NAME_ASC,
+      page: 1,
+      pageSize: 9,
+    });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'resource.opensAt > :todayStartTime',
+      { todayStartTime: '10:00' },
+    );
+    queryBuilder.andWhere.mockClear();
+    await todayService.discover({
+      date: '2026-09-14',
+      sort: ResourceSort.NAME_ASC,
+      page: 1,
+      pageSize: 9,
+    });
+    expect(resourcesRepository.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+
+    await todayService.discover({
+      date: '2026-09-16',
+      sort: ResourceSort.NAME_ASC,
+      page: 1,
+      pageSize: 9,
+    });
+    expect(resourcesRepository.manager.transaction).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith(
+      'resource.opensAt > :todayStartTime',
+      expect.anything(),
+    );
+  });
+
+  it('filters date-only discovery by operating day, closures and any booking', async () => {
+    await service.discover({
+      date: '2026-09-15',
+      sort: ResourceSort.NAME_ASC,
+      page: 1,
+      pageSize: 9,
+    });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      ':dayOfWeek = ANY(resource.operatingDays)',
+      { dayOfWeek: 2 },
+    );
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith(
+      'resource.opensAt <= :startTime',
+      expect.anything(),
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('resource_closures'),
+      { availabilityDate: '2026-09-15' },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('FROM bookings booking'),
+      {
+        blockingStatuses: ['pending', 'confirmed', 'checked_in'],
+      },
+    );
+  });
+
   it('filters discovery by an operational date and interval', async () => {
     await service.discover({
       date: '2026-09-15',
