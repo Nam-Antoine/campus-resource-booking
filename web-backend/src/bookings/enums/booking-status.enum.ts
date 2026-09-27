@@ -6,6 +6,6 @@ export enum BookingStatus {
   NO_SHOW = 'no_show',
   REJECTED = 'rejected',
   CANCELLED = 'cancelled',
-  /** A request nobody reviewed by its check-in deadline; it holds no slot. */
+  /** A request nobody reviewed by its scheduled end; it holds no slot. */
   EXPIRED = 'expired',
 }

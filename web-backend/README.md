@@ -23,7 +23,7 @@ To run everything in Docker instead, see the [root README](../README.md).
 - **Code layout:** one feature module per folder in `src/` (`auth`, `users`, `resources`, `bookings`, `analytics`, `events`, ...). Controllers handle HTTP, services hold the rules, DTOs validate input and shape responses. Configuration is read only through `src/config/`.
 - **Schema:** migrations in `src/database/migrations` are the source of truth; `synchronize` stays off.
 - **Scripts:** the demo data, benchmark and load-test tools live in `src/scripts/`.
-- **Arrival:** the student shows the confirmed booking in their account; staff match its full ID, student, resource, and time against `GET /staff/bookings/:id`, then call `PATCH /staff/bookings/:id/confirm-check-in` with **no body**. Only staff/admin can confirm, and only from 15 minutes before until 15 minutes after the booking starts. Pending bookings need approval first. The student code-generation endpoint has been removed; existing codes are retired by migration `1727000000000-ManualStaffCheckIn`. Unchecked confirmed bookings are released after the deadline.
+- **Arrival:** the student shows the confirmed booking in their account; staff match its full ID, student, resource, and time against `GET /staff/bookings/:id`, then call `PATCH /staff/bookings/:id/confirm-check-in` with **no body**. Only staff/admin can confirm, and only from the reservation start until its scheduled end. Pending bookings need approval first. The student code-generation endpoint has been removed; existing codes are retired by migration `1727000000000-ManualStaffCheckIn`. Unchecked confirmed bookings become no-shows after their scheduled end.
 
 ## Commands
 

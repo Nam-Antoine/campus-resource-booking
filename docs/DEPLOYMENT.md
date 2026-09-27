@@ -23,7 +23,7 @@ NEXT_PUBLIC_API_URL=https://your-api.example/api
 
 ## Upgrading from code-based check-in
 
-The backend container runs PostgreSQL migrations **before** the API starts. Migration `1727000000000-ManualStaffCheckIn` clears outstanding six-digit codes and preserves existing arrival/checkout history. The retired student code endpoint will not work after that migration. Back up the database and test restoring it before upgrading (instructions below), then plan a short maintenance window so an old frontend is not served against the new API:
+The backend container runs PostgreSQL migrations **before** the API starts. Migration `1727000000000-ManualStaffCheckIn` clears outstanding six-digit codes and preserves existing arrival/checkout history. Migration `1727100000000-CheckInUntilReservationEnd` changes the no-show constraint without discarding historical early no-shows. The retired student code endpoint will not work after these migrations. Back up the database and test restoring it before upgrading (instructions below), then plan a short maintenance window so an old frontend is not served against the new API:
 
 ```bash
 # From the repository root, after backing up the database:
@@ -32,7 +32,7 @@ docker compose up -d --build backend frontend
 docker compose ps # postgres, backend, frontend must all be healthy
 ```
 
-Check `docker compose logs backend` for migration or startup errors and complete the [student-to-staff browser smoke flow](MVP_RELEASE.md#6-browser-smoke-matrix). The new flow uses the student's booking confirmation and a staff-only, bodyless `PATCH /staff/bookings/:id/confirm-check-in` inside the existing 15-minute-before to 15-minute-after-start window. A confirmed booking nobody checks in by the deadline is automatically released. Do not revert this migration on a database with live check-in records: deleted codes cannot be recovered; restore from a verified pre-upgrade backup if a rollback is truly necessary.
+Check `docker compose logs backend` for migration or startup errors and complete the [student-to-staff browser smoke flow](MVP_RELEASE.md#6-browser-smoke-matrix). The new flow uses the student's booking confirmation and a staff-only, bodyless `PATCH /staff/bookings/:id/confirm-check-in` from the scheduled start until the end of the reservation. A confirmed booking nobody checks in by its scheduled end becomes a no-show. Do not revert the manual check-in migration on a database with live check-in records: deleted codes cannot be recovered; restore from a verified pre-upgrade backup if a rollback is truly necessary.
 
 ## Built-in sample resources
 

@@ -207,7 +207,7 @@ export class StaffBookingsController {
 
   @Patch(':id/no-show')
   @ApiOperation({
-    summary: 'Mark a booking that missed its check-in deadline as no-show',
+    summary: 'Mark a booking not checked in by its scheduled end as no-show',
   })
   @ApiOkResponse({ type: StaffBookingResponseDto })
   @ApiNotFoundResponse({ description: 'Booking not found' })

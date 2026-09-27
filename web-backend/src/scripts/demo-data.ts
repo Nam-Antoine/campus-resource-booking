@@ -107,10 +107,9 @@ async function seed(client: Client): Promise<void> {
   }
   const rounds = Number(process.env.AUTH_BCRYPT_ROUNDS ?? 12);
   const passwordHash = await bcrypt.hash(password, rounds);
-  const { date: today, hour: currentHour, minute } = campusParts();
-  // Check-in closes 15 minutes after the start, and a booking not checked in
-  // by then is released. Past that point in the hour, use the next hour.
-  const hour = minute < 15 ? currentHour : currentHour + 1;
+  const { date: today, hour: currentHour } = campusParts();
+  // Check-in is available throughout the reservation, not before it starts.
+  const hour = currentHour;
   const pendingDate = addDays(today, 2);
   const historyDate = addDays(today, -7);
 
@@ -225,7 +224,7 @@ async function seed(client: Client): Promise<void> {
       [resources.get('room'), studentId, historyDate, staffId],
     );
 
-    if (hour <= 22) {
+    if (hour >= 8 && hour <= 22) {
       const start = `${String(hour).padStart(2, '0')}:00`;
       const end = `${String(hour + 1).padStart(2, '0')}:00`;
       await client.query(
@@ -249,9 +248,9 @@ async function seed(client: Client): Promise<void> {
   console.log('  Password: value supplied through DEMO_PASSWORD');
   console.log(`  Pending approval date: ${pendingDate}`);
   console.log(
-    hour <= 22
+    hour >= 8 && hour <= 22
       ? `  Staff manual check-in (no code): ${today} ${String(hour).padStart(2, '0')}:00-${String(hour + 1).padStart(2, '0')}:00 ICT`
-      : '  Check-in scenario omitted after 22:15 ICT; seed earlier in the day.',
+      : '  Check-in scenario omitted outside 08:00–23:00 ICT; seed during operating hours.',
   );
 }
 

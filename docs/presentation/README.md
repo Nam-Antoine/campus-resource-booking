@@ -39,7 +39,7 @@ Rules for the run-through:
    ```bash
    docker compose exec backend node dist/scripts/catalog-import.js
    ```
-3. **Just before the talk**, seed the demo data. It creates a check-in booking for the current hour, or for the next hour once the current one is more than 15 minutes old, and prints its time. Check-in only works from 15 minutes before to 15 minutes after that start. After that the booking is released automatically, so time row 4 inside that window. Details, including the database settings it needs, are in [MVP_RELEASE.md §5](../MVP_RELEASE.md#5-demo-data).
+3. **Just before the talk**, seed the demo data. It creates a check-in booking for the current hour and prints its time. Staff can check the student in from the start through the scheduled end, so finish row 4 within that hour. Details, including the database settings it needs, are in [MVP_RELEASE.md §5](../MVP_RELEASE.md#5-demo-data).
    ```bash
    cd web-backend
    set -a; . ./.env; set +a

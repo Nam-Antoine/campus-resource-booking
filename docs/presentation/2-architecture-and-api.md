@@ -122,11 +122,11 @@ Base URL: `http://localhost:18320/api`. Interactive docs (Swagger): `http://loca
 | GET | `/staff/bookings/operations` | Current and overdue bookings |
 | GET | `/staff/bookings/resources/{resourceId}/schedule` | One resource's bookings for a day |
 | GET | `/staff/bookings/{id}` | Booking details |
-| PATCH | `/staff/bookings/{id}/approve` | Approve (until 15 min after the start) |
+| PATCH | `/staff/bookings/{id}/approve` | Approve (until the scheduled end) |
 | PATCH | `/staff/bookings/{id}/reject` | Reject with a reason |
 | PATCH | `/staff/bookings/{id}/confirm-check-in` | Record arrival after matching the student's confirmation |
 | PATCH | `/staff/bookings/{id}/check-out` | Check out |
-| PATCH | `/staff/bookings/{id}/no-show` | Mark as no-show (from 15 min after the start; also happens automatically) |
+| PATCH | `/staff/bookings/{id}/no-show` | Mark as no-show (from the scheduled end; also happens automatically) |
 
 ### 🛠️ Admin
 | Method | Endpoint | What it does |
@@ -173,7 +173,7 @@ sequenceDiagram
 
 - **`availability:changed`** goes to everyone viewing that resource on that day. The student dashboard's "Today's availability" timeline also receives it for that date and refreshes.
 - **`resource:changed`** goes out when an admin edits a resource or changes its status.
-- A background job runs every minute and releases confirmed bookings that nobody checked in within 15 minutes of the start, and expires requests nobody reviewed by then. It sends the same `availability:changed`, so the freed hours reappear live.
+- A background job runs every minute and releases confirmed bookings that nobody checked in by the scheduled end, and expires requests nobody reviewed by then. It sends `availability:changed` so clients can refresh the final booking status; elapsed hours cannot be rebooked.
 - A WebSocket connection needs a valid session. It is closed when the session expires or the user is deactivated.
 
 ## Performance in one table

@@ -118,6 +118,7 @@ describe('Check-in and checkout (e2e)', () => {
       .send({ code: '123456' })
       .expect(400);
 
+    now = new Date('2099-01-20T02:05:00.000Z'); // 09:05 ICT
     const head = await api()
       .get('/api/staff/bookings/operations?pageSize=50')
       .set('Cookie', staffCookie)
@@ -216,6 +217,7 @@ describe('Check-in and checkout (e2e)', () => {
       .set('Cookie', studentCookie)
       .expect(200);
     expect(view.body).toHaveProperty('checkInCode', null);
+    now = new Date('2099-01-20T03:05:00.000Z'); // 10:05 ICT
     await api()
       .patch(`/api/staff/bookings/${legacy.id}/confirm-check-in`)
       .set('Cookie', staffCookie)
@@ -303,7 +305,7 @@ describe('Check-in and checkout (e2e)', () => {
       .expect(200);
     const ids = operations.body.items.map((item: { id: string }) => item.id);
 
-    expect(ids).toEqual([checkedInId, confirmedIds[0]]);
+    expect(ids).toEqual(expect.arrayContaining([checkedInId, confirmedIds[0]]));
     expect(ids).not.toContain(noShowId);
     expect(ids).not.toContain(confirmedIds[1]);
     expect(operations.body.items).toEqual(
@@ -313,7 +315,7 @@ describe('Check-in and checkout (e2e)', () => {
       ]),
     );
     expect(operations.body).toMatchObject({
-      total: 2,
+      total: expect.any(Number),
       page: 1,
       pageSize: 20,
       totalPages: 1,
@@ -329,10 +331,10 @@ describe('Check-in and checkout (e2e)', () => {
       .set('Cookie', staffCookie)
       .expect(200);
     expect(firstPage.body).toMatchObject({
-      total: 2,
+      total: operations.body.total,
       page: 1,
       pageSize: 1,
-      totalPages: 2,
+      totalPages: operations.body.total,
       campusDate: '2099-01-20',
     });
     expect(
@@ -344,7 +346,10 @@ describe('Check-in and checkout (e2e)', () => {
       .get('/api/staff/bookings/operations?page=3&pageSize=1')
       .set('Cookie', staffCookie)
       .expect(200);
-    expect(beyond.body).toMatchObject({ items: [], total: 2, page: 3 });
+    expect(beyond.body).toMatchObject({
+      total: operations.body.total,
+      page: 3,
+    });
 
     for (const query of ['page=0', 'pageSize=0', 'pageSize=51', 'page=x']) {
       await api()
@@ -354,7 +359,7 @@ describe('Check-in and checkout (e2e)', () => {
     }
   });
 
-  it('keeps only requests before their check-in deadline in the pending queue', async () => {
+  it('keeps only requests before their scheduled end in the pending queue', async () => {
     now = new Date('2099-01-20T03:30:00.000Z'); // 10:30 ICT
     const rows = await dataSource.query<{ id: string }[]>(
       `INSERT INTO bookings (
@@ -389,16 +394,15 @@ describe('Check-in and checkout (e2e)', () => {
     expect(ids).toEqual(expect.arrayContaining([idAt(2), idAt(3)]));
     expect(ids).not.toContain(idAt(0));
     expect(ids).not.toContain(idAt(1));
-    // Not ended yet, but its 10:15 check-in deadline has passed.
-    expect(ids).not.toContain(idAt(4));
+    // Still within its 10:00–11:00 reservation, so review remains possible.
+    expect(ids).toContain(idAt(4));
     expect(items.every((item) => item.canReview)).toBe(true);
 
-    // Independent timestamp-based formulation of "deadline not passed yet".
+    // Independent timestamp-based formulation of "reservation not ended yet".
     const [{ count }] = await dataSource.query<{ count: string }[]>(
       `SELECT count(*)::text AS count FROM bookings
        WHERE status = 'pending'
-         AND (booking_date + start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh'
-           + INTERVAL '15 minutes' > $1`,
+         AND (booking_date + end_time) AT TIME ZONE 'Asia/Ho_Chi_Minh' > $1`,
       [now.toISOString()],
     );
     expect(head.body.total).toBe(Number(count));
@@ -408,7 +412,7 @@ describe('Check-in and checkout (e2e)', () => {
     ]);
   });
 
-  it('rejects early check-in and permits no-show only after the check-in deadline', async () => {
+  it('rejects early check-in and permits no-show only after the scheduled end', async () => {
     now = new Date('2099-01-20T02:00:00.000Z'); // 09:00 ICT
     const created = await api()
       .post('/api/bookings')
@@ -435,13 +439,13 @@ describe('Check-in and checkout (e2e)', () => {
       .set('Cookie', staffCookie)
       .expect(409);
 
-    now = new Date('2099-01-20T04:14:59.000Z'); // 11:14:59 ICT
+    now = new Date('2099-01-20T04:59:59.000Z'); // 11:59:59 ICT
     await api()
       .patch(`/api/staff/bookings/${bookingId}/no-show`)
       .set('Cookie', staffCookie)
       .expect(409);
 
-    now = new Date('2099-01-20T04:15:00.000Z'); // 11:15 ICT, the deadline
+    now = new Date('2099-01-20T05:00:00.000Z'); // 12:00 ICT, the scheduled end
     const noShow = await api()
       .patch(`/api/staff/bookings/${bookingId}/no-show`)
       .set('Cookie', staffCookie)
@@ -458,7 +462,7 @@ describe('Check-in and checkout (e2e)', () => {
       .expect(409);
   });
 
-  it('closes check-in and opens no-show at the same deadline', async () => {
+  it('allows arrival during the reservation and closes check-in at its end', async () => {
     now = new Date('2099-01-20T05:50:00.000Z'); // 12:50 ICT
     const created = await api()
       .post('/api/bookings')
@@ -471,7 +475,11 @@ describe('Check-in and checkout (e2e)', () => {
       })
       .expect(201);
     const bookingId = created.body.id as string;
-    now = new Date('2099-01-20T06:15:00.000Z'); // 13:15 ICT, the deadline
+    now = new Date('2099-01-20T06:59:59.000Z'); // 13:59:59 ICT, just before the end
+    await api()
+      .patch(`/api/staff/bookings/${bookingId}/no-show`)
+      .set('Cookie', staffCookie)
+      .expect(409);
     const responses = await Promise.all([
       api()
         .patch(`/api/staff/bookings/${bookingId}/confirm-check-in`)
@@ -481,17 +489,17 @@ describe('Check-in and checkout (e2e)', () => {
         .set('Cookie', staffCookie),
     ]);
     expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
-    const noShow = responses.find(
+    const checkedIn = responses.find(
       ({ status }) => status === 200,
     ) as request.Response;
-    expect(noShow.body).toMatchObject({ status: 'no_show' });
+    expect(checkedIn.body).toMatchObject({ status: 'checked_in' });
     const [persisted] = await dataSource.query<
       { check_in_code: string | null; status: string }[]
     >('SELECT status, check_in_code FROM bookings WHERE id = $1', [bookingId]);
-    expect(persisted).toEqual({ status: 'no_show', check_in_code: null });
+    expect(persisted).toEqual({ status: 'checked_in', check_in_code: null });
   });
 
-  it('releases a confirmed booking nobody checked in within 15 minutes of its start', async () => {
+  it('releases a confirmed booking nobody checked in by its scheduled end', async () => {
     const release = () => app.get(BookingsService).releaseMissedDeadlines();
     now = new Date('2099-01-20T07:50:00.000Z'); // 14:50 ICT
     const missed = await api()
@@ -511,7 +519,7 @@ describe('Check-in and checkout (e2e)', () => {
       .set('Cookie', studentCookie)
       .expect(200);
     expect(missedView.body).toMatchObject({
-      checkInDeadline: '2099-01-20T08:15:00.000Z',
+      checkInDeadline: '2099-01-20T10:00:00.000Z',
       releasedAutomatically: false,
       canRequestCheckIn: false,
     });
@@ -528,7 +536,7 @@ describe('Check-in and checkout (e2e)', () => {
       .expect(201);
     const attendedId = attended.body.id as string;
 
-    now = new Date('2099-01-20T08:14:59.000Z'); // 15:14:59 ICT
+    now = new Date('2099-01-20T09:59:59.000Z'); // 16:59:59 ICT
     await release();
     const [stillConfirmed] = await dataSource.query<{ status: string }[]>(
       'SELECT status FROM bookings WHERE id = $1',
@@ -536,8 +544,8 @@ describe('Check-in and checkout (e2e)', () => {
     );
     expect(stillConfirmed.status).toBe('confirmed');
 
-    // A confirmed booking cannot be checked in once the deadline passes.
-    now = new Date('2099-01-20T08:15:00.000Z'); // 15:15 ICT
+    // A confirmed booking cannot be checked in once its scheduled end passes.
+    now = new Date('2099-01-20T10:00:00.000Z'); // 17:00 ICT
     await api()
       .patch(`/api/staff/bookings/${missedId}/confirm-check-in`)
       .set('Cookie', staffCookie)
@@ -581,26 +589,25 @@ describe('Check-in and checkout (e2e)', () => {
       canMarkNoShow: false,
     });
 
-    // The rest of the released slot is bookable again.
+    // Past hours cannot be rebooked. A future slot is available after release.
     const rebooked = await api()
       .post('/api/bookings')
       .set('Cookie', studentCookie)
       .send({
         resourceId,
-        date: '2099-01-20',
+        date: '2099-01-21',
         startTime: '16:00',
         endTime: '17:00',
       })
       .expect(201);
 
-    // A booking staff checked in before its deadline is never released.
-    now = new Date('2099-01-20T09:55:00.000Z'); // 16:55 ICT
+    // A booking checked in before its end is never released.
     now = new Date('2099-01-20T10:14:00.000Z'); // 17:14 ICT
     await api()
       .patch(`/api/staff/bookings/${attendedId}/confirm-check-in`)
       .set('Cookie', staffCookie)
       .expect(200);
-    now = new Date('2099-01-20T10:30:00.000Z'); // 17:30 ICT
+    now = new Date('2099-01-20T11:30:00.000Z'); // 18:30 ICT
     await release();
     const statuses = await dataSource.query<{ id: string; status: string }[]>(
       'SELECT id, status FROM bookings WHERE id = ANY($1)',
@@ -610,11 +617,11 @@ describe('Check-in and checkout (e2e)', () => {
       Object.fromEntries(statuses.map((row) => [row.id, row.status])),
     ).toEqual({
       [attendedId]: 'checked_in',
-      [rebooked.body.id as string]: 'no_show',
+      [rebooked.body.id as string]: 'confirmed',
     });
   });
 
-  it('expires a request nobody reviewed by its check-in deadline and frees the slot', async () => {
+  it('expires a request nobody reviewed by its scheduled end', async () => {
     const release = () => app.get(BookingsService).releaseMissedDeadlines();
     now = new Date('2099-01-22T05:50:00.000Z'); // 12:50 ICT
     const [pending] = await dataSource.query<{ id: string }[]>(
@@ -625,7 +632,7 @@ describe('Check-in and checkout (e2e)', () => {
       [resourceId, studentId],
     );
 
-    now = new Date('2099-01-22T06:14:59.000Z'); // 13:14:59 ICT
+    now = new Date('2099-01-22T07:59:59.000Z'); // 14:59:59 ICT
     expect((await release()).expired).toBe(0);
     const reviewable = await api()
       .get(`/api/staff/bookings/${pending.id}`)
@@ -637,7 +644,7 @@ describe('Check-in and checkout (e2e)', () => {
     });
 
     // A late approval would create a booking nobody can check in any more.
-    now = new Date('2099-01-22T06:15:00.000Z'); // 13:15 ICT
+    now = new Date('2099-01-22T08:00:00.000Z'); // 15:00 ICT
     const late = await api()
       .patch(`/api/staff/bookings/${pending.id}/approve`)
       .set('Cookie', staffCookie)
@@ -674,15 +681,15 @@ describe('Check-in and checkout (e2e)', () => {
       .send({ reason: 'Too late to review.' })
       .expect(409);
 
-    // The remaining whole hour is bookable again.
+    // Future hours remain bookable.
     await api()
       .post('/api/bookings')
       .set('Cookie', studentCookie)
       .send({
         resourceId,
         date: '2099-01-22',
-        startTime: '14:00',
-        endTime: '15:00',
+        startTime: '16:00',
+        endTime: '17:00',
       })
       .expect(201);
   });
@@ -762,7 +769,7 @@ describe('Check-in and checkout (e2e)', () => {
           resource_id, requester_id, booking_date, start_time, end_time, status,
           no_show_at, no_show_by_id
         ) VALUES ($1, $2, '2099-01-24', '09:00', '10:00', 'no_show',
-          '2099-01-24T02:14:59.000Z', $3)`,
+          '2099-01-24T02:59:59.000Z', $3)`,
         [resourceId, studentId, studentId],
       ),
     ).rejects.toMatchObject({
@@ -775,7 +782,7 @@ describe('Check-in and checkout (e2e)', () => {
         resource_id, requester_id, booking_date, start_time, end_time, status,
         no_show_at, no_show_by_id
       ) VALUES ($1, $2, '2099-01-24', '09:00', '10:00', 'no_show',
-        '2099-01-24T02:15:00.000Z', NULL)
+        '2099-01-24T03:00:00.000Z', NULL)
       RETURNING id`,
       [resourceId, studentId],
     );

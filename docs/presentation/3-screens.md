@@ -148,7 +148,7 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 │ │ Student · booking ID · resource · building · date and time │ │
 │ └─────────────────────────────────────────────────────────────┘ │
 │ [Cancel booking] (while eligible)                               │
-│ Not checked in by start + 15 min → released for others         │
+│ Not checked in by reservation end → recorded as no-show         │
 └────────────────────────────────────────────────────────────────┘
 ```
 

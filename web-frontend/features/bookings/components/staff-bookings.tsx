@@ -403,7 +403,7 @@ export function StaffBookingDetail({
                 <div className={styles.outcome} data-status={booking.status === "expired" ? "expired" : "pending"}>
                   <strong>{booking.status === "expired" ? "Expired request · not reviewed in time" : "Review window ended · awaiting release"}</strong>
                   <span>
-                    Nobody approved or rejected this request by {campusClockTime(booking.checkInDeadline)}, 15 minutes after its start. {booking.status === "expired"
+                    Nobody approved or rejected this request by its scheduled end at {campusClockTime(booking.checkInDeadline)}. {booking.status === "expired"
                       ? "The system expired the request and released its time."
                       : "Staff can no longer review it. The request is still pending until the release job updates it; its time may remain held until then."}
                   </span>
@@ -411,8 +411,8 @@ export function StaffBookingDetail({
               ) : booking.status === "confirmed" ? (
                 <>
                   <p>{booking.canMarkNoShow
-                    ? `Check-in closed at ${campusClockTime(booking.checkInDeadline)}. This booking remains confirmed until a no-show is recorded; the slot may still be held. Record the no-show to release it.`
-                    : `Match the student's confirmation against the full booking ID, name, university email, resource, location and scheduled time above. Check the current status before confirming arrival. Check-in closes at ${campusClockTime(booking.checkInDeadline)}; if nobody is checked in by then, the system releases the booking.`}</p>
+                    ? `The reservation ended at ${campusClockTime(booking.checkInDeadline)} without check-in. This booking remains confirmed until a no-show is recorded; the slot may still be held. Record the no-show to close it.`
+                    : `Match the student's confirmation against the full booking ID, name, university email, resource, location and scheduled time above. Check the current status before confirming arrival. Staff can check in students from the scheduled start until the end at ${campusClockTime(booking.checkInDeadline)}.`}</p>
                   {booking.canConfirmCheckIn && (
                     <div className={styles.checkInForm}>
                       <button type="button" disabled={isSaving} onClick={() => void operate("check-in")}>

@@ -245,7 +245,7 @@ describe('Admin booking analytics (e2e)', () => {
         resource_id, requester_id, booking_date, start_time, end_time, status,
         reviewed_at, reviewed_by_id, no_show_at, no_show_by_id
       ) VALUES ($1, $2, '2099-03-05', '09:00', '12:00', 'no_show',
-        now(), $2, '2099-03-05T09:15:00+07:00', NULL)
+        now(), $2, '2099-03-05T12:00:00+07:00', NULL)
       RETURNING id`,
       [resourceIds[0], studentId],
     );

@@ -18,10 +18,6 @@ import {
 import { ResourceClosure } from '../resources/entities/resource-closure.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceStatus } from '../resources/enums/resource-status.enum';
-import {
-  CHECK_IN_GRACE_MINUTES,
-  CHECK_IN_OPENS_MINUTES_BEFORE_START,
-} from './bookings.constants';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { Booking } from './entities/booking.entity';
 import { BookingStatus } from './enums/booking-status.enum';
@@ -178,7 +174,7 @@ export class BookingsService {
   }
 
   /**
-   * Pending requests that can still be reviewed, i.e. whose check-in deadline
+   * Pending requests that can still be reviewed, i.e. whose scheduled end
    * has not passed in campus time. Filtering happens in SQL so `total` and the
    * page boundaries agree with what staff can act on.
    */
@@ -191,22 +187,17 @@ export class BookingsService {
     evaluatedAt: Date;
   }> {
     const evaluatedAt = this.clock();
-    // Reviewable until the check-in deadline, i.e. while start > now - grace.
-    // Starts are whole hours, so minute precision is exact.
-    const cutoff = new Date(
-      evaluatedAt.getTime() - CHECK_IN_GRACE_MINUTES * 60 * 1000,
-    );
-    const cutoffDate = campusDateOf(cutoff);
-    const cutoffTime = campusTimeOf(cutoff);
+    const today = campusDateOf(evaluatedAt);
+    const currentTime = campusTimeOf(evaluatedAt);
     const [bookings, total] = await this.dataSource
       .getRepository(Booking)
       .findAndCount({
         where: [
-          { status: BookingStatus.PENDING, date: MoreThan(cutoffDate) },
+          { status: BookingStatus.PENDING, date: MoreThan(today) },
           {
             status: BookingStatus.PENDING,
-            date: cutoffDate,
-            startTime: MoreThan(cutoffTime),
+            date: today,
+            endTime: MoreThan(currentTime),
           },
         ],
         relations: this.staffRelations(),
@@ -335,7 +326,7 @@ export class BookingsService {
       ) {
         throw new BookingDomainError(
           'NO_SHOW_NOT_AVAILABLE',
-          'Only a confirmed booking that missed its check-in deadline can be marked as a no-show',
+          'Only a confirmed booking that reached its scheduled end can be marked as a no-show',
         );
       }
 
@@ -355,13 +346,11 @@ export class BookingsService {
   }
 
   /**
-   * Frees every slot whose check-in deadline (CHECK_IN_GRACE_MINUTES after the
-   * start) has passed without the booking being used:
+   * Closes bookings whose scheduled end has passed without check-in:
    * - a confirmed booking staff have not checked in becomes a no-show with no
    *   staff actor, even if it has a legacy check-in request timestamp;
    * - a request nobody reviewed becomes expired.
-   * Neither status holds the slot, so any remaining whole hours become
-   * bookable again.
+   * Neither status holds the slot. History remains available.
    */
   async releaseMissedDeadlines(): Promise<{
     released: number;
@@ -406,9 +395,8 @@ export class BookingsService {
       // Lets the status partial indexes skip every future booking.
       .andWhere('booking_date <= :today', { today: campusDateOf(now) })
       .andWhere(
-        `(("booking_date" + "start_time") AT TIME ZONE 'Asia/Ho_Chi_Minh')
-          + make_interval(mins => :graceMinutes) <= :now`,
-        { graceMinutes: CHECK_IN_GRACE_MINUTES, now },
+        `(("booking_date" + "end_time") AT TIME ZONE 'Asia/Ho_Chi_Minh') <= :now`,
+        { now },
       )
       .returning(
         `"resource_id", to_char("booking_date", 'YYYY-MM-DD') AS "booking_date"`,
@@ -489,7 +477,7 @@ export class BookingsService {
     );
   }
 
-  /** When check-in closes and an unchecked confirmed booking is released. */
+  /** The scheduled end, when check-in closes and an unused booking is released. */
   checkInDeadline(booking: Booking): Date {
     return new Date(this.checkInDeadlineMs(booking));
   }
@@ -520,7 +508,7 @@ export class BookingsService {
       if (!this.canReview(booking, reviewedAt)) {
         throw new BookingDomainError(
           'BOOKING_REVIEW_WINDOW_ENDED',
-          'This booking request can no longer be reviewed because its check-in deadline, 15 minutes after the start, has passed',
+          'This booking request can no longer be reviewed because its scheduled end has passed',
         );
       }
 
@@ -547,17 +535,14 @@ export class BookingsService {
   }
 
   private isWithinCheckInWindow(booking: Booking, now: Date): boolean {
-    const opensAt =
-      this.bookingStartMs(booking) -
-      CHECK_IN_OPENS_MINUTES_BEFORE_START * 60 * 1000;
     return (
-      now.getTime() >= opensAt &&
+      now.getTime() >= this.bookingStartMs(booking) &&
       now.getTime() < this.checkInDeadlineMs(booking)
     );
   }
 
   private checkInDeadlineMs(booking: Booking): number {
-    return this.bookingStartMs(booking) + CHECK_IN_GRACE_MINUTES * 60 * 1000;
+    return this.bookingEndMs(booking);
   }
 
   private bookingStartMs(booking: Booking): number {

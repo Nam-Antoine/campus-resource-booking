@@ -91,7 +91,7 @@ The seed is idempotent: rerunning it removes and recreates only `demo.*@usth.edu
 - Admin: `demo.admin@usth.edu.vn`
 - A pending approval request
 - Completed student history
-- A confirmed visit for the current hour (or the next hour after hh:15) when seeded before 22:15 ICT. Check-in closes 15 minutes after its start, and the booking is released automatically if nobody is checked in by then
+- A confirmed visit for the current hour when seeded between 08:00 and 22:59 ICT. Staff can confirm check-in until the scheduled end; only then does an unchecked booking become a no-show
 - Room, laboratory, and equipment inventory for analytics
 
 Remove it after the demonstration:

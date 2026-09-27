@@ -182,10 +182,10 @@ describe('BookingsService', () => {
       endTime: '10:00:00',
       checkInRequestedAt: null,
     } as Booking;
-    const beforeWindow = new Date('2026-09-15T01:44:59.999Z'); // 08:44:59
-    const atWindow = new Date('2026-09-15T01:45:00.000Z'); // 08:45
-    const beforeDeadline = new Date('2026-09-15T02:14:59.999Z'); // 09:14:59
-    const atDeadline = new Date('2026-09-15T02:15:00.000Z'); // 09:15
+    const beforeWindow = new Date('2026-09-15T01:59:59.999Z'); // 08:59:59
+    const atWindow = new Date('2026-09-15T02:00:00.000Z'); // 09:00
+    const beforeDeadline = new Date('2026-09-15T02:59:59.999Z'); // 09:59:59
+    const atDeadline = new Date('2026-09-15T03:00:00.000Z'); // 10:00
 
     expect(harness.service.canConfirmCheckIn(booking, beforeWindow)).toBe(
       false,
@@ -229,7 +229,7 @@ describe('BookingsService', () => {
     ).toBe(false);
   });
 
-  it('keeps a pending booking reviewable only until its check-in deadline', () => {
+  it('keeps a pending booking reviewable until its scheduled end', () => {
     const harness = createHarness();
     const booking = {
       status: BookingStatus.PENDING,
@@ -238,12 +238,12 @@ describe('BookingsService', () => {
       endTime: '10:00:00',
     } as Booking;
 
-    // The deadline is 08:15 on campus, 01:15 UTC; the end is much later.
+    // The deadline is 10:00 on campus, 03:00 UTC.
     expect(
-      harness.service.canReview(booking, new Date('2026-09-15T01:14:59.999Z')),
+      harness.service.canReview(booking, new Date('2026-09-15T02:59:59.999Z')),
     ).toBe(true);
     expect(
-      harness.service.canReview(booking, new Date('2026-09-15T01:15:00.000Z')),
+      harness.service.canReview(booking, new Date('2026-09-15T03:00:00.000Z')),
     ).toBe(false);
     expect(
       harness.service.canReview(
@@ -310,7 +310,7 @@ describe('BookingsService', () => {
     }
 
     it('filters reviewable pending requests in SQL and paginates oldest first', async () => {
-      // 10:30 on campus (UTC+7); requests starting after 10:15 are reviewable.
+      // 10:30 on campus (UTC+7); requests ending after 10:30 are reviewable.
       const { service, findAndCount } = queueHarness(
         '2026-09-15T03:30:00.000Z',
       );
@@ -336,9 +336,9 @@ describe('BookingsService', () => {
         {
           status: BookingStatus.PENDING,
           date: '2026-09-15',
-          startTime: expect.objectContaining({
+          endTime: expect.objectContaining({
             _type: 'moreThan',
-            _value: '10:15',
+            _value: '10:30',
           }),
         },
       ]);
@@ -354,14 +354,12 @@ describe('BookingsService', () => {
       const [options] = findAndCount.mock.calls[0];
       expect(options.where[1]).toMatchObject({
         date: '2026-09-16',
-        startTime: expect.objectContaining({ _value: '06:15' }),
+        endTime: expect.objectContaining({ _value: '06:30' }),
       });
     });
 
-    it('keeps the previous day reviewable in the first 15 minutes after midnight', async () => {
-      // 2026-09-15 17:10 UTC is 00:10 on 2026-09-16 on campus, so a request
-      // starting at 23:00 on 2026-09-15 is past its 23:15 deadline, and the
-      // cutoff falls on the previous campus date at 23:55.
+    it('excludes previous-day requests after midnight', async () => {
+      // 2026-09-15 17:10 UTC is 00:10 on 2026-09-16 on campus.
       const { service, findAndCount } = queueHarness(
         '2026-09-15T17:10:00.000Z',
       );
@@ -370,11 +368,11 @@ describe('BookingsService', () => {
       const [options] = findAndCount.mock.calls[0];
       expect(options.where).toEqual([
         expect.objectContaining({
-          date: expect.objectContaining({ _value: '2026-09-15' }),
+          date: expect.objectContaining({ _value: '2026-09-16' }),
         }),
         expect.objectContaining({
-          date: '2026-09-15',
-          startTime: expect.objectContaining({ _value: '23:55' }),
+          date: '2026-09-16',
+          endTime: expect.objectContaining({ _value: '00:10' }),
         }),
       ]);
     });

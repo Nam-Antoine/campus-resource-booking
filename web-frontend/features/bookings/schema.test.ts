@@ -40,7 +40,7 @@ const studentBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
-  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  checkInDeadline: "2099-01-05T03:00:00.000Z",
   releasedAutomatically: false,
   cancelledAt: null,
   reviewedAt: null,
@@ -75,7 +75,7 @@ const staffBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
-  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  checkInDeadline: "2099-01-05T03:00:00.000Z",
   releasedAutomatically: false,
   resource: studentBooking.resource,
   requester: {
@@ -295,16 +295,17 @@ describe("student booking timeline schema", () => {
     ).toBeNull();
   });
 
-  it("accepts a booking released at its check-in deadline", () => {
+  it("accepts a booking released at its scheduled end and a historical early no-show", () => {
     expect(
       parseStudentBooking({
         ...studentBooking,
         status: "no_show",
         canCancel: false,
         releasedAutomatically: true,
-        noShowAt: "2099-01-05T02:15:00.000Z",
+        noShowAt: "2099-01-05T03:00:00.000Z",
       }),
     ).toMatchObject({ status: "no_show", releasedAutomatically: true });
+    expect(parseStudentBooking({ ...studentBooking, status: "no_show", canCancel: false, noShowAt: "2099-01-05T02:15:00.000Z" })).toMatchObject({ status: "no_show" });
   });
 
   it.each(["pending", "confirmed", "checked_in"] as const)(

@@ -183,10 +183,10 @@ stateDiagram-v2
     pending --> confirmed: staff approve
     pending --> rejected: staff reject with reason
     pending --> cancelled: student cancel
-    pending --> expired: not reviewed 15 min after start
+    pending --> expired: not reviewed by scheduled end
 
     confirmed --> checked_in: staff match confirmation and record arrival
-    confirmed --> no_show: not checked in 15 min after start
+    confirmed --> no_show: not checked in by scheduled end
     confirmed --> cancelled: student cancel while eligible
 
     checked_in --> completed: staff check out
@@ -236,17 +236,16 @@ sequenceDiagram
     API-->>T: status completed
 ```
 
-Check-in closes 15 minutes after the start, and so does the review window for
-a pending request. At that deadline `BookingReleaseScheduler` frees the slot of
-anything not used: it runs `releaseMissedDeadlines()` every
-`BOOKING_RELEASE_INTERVAL_SECONDS` (60 by default), which marks a confirmed
-booking staff have not checked in as `no_show` with no staff actor, and a
-request nobody reviewed as `expired`. Any remaining whole hours of the slot can
-then be booked again. Showing the confirmation without staff recording arrival does
-not keep the booking. Staff can record the no-show themselves from the same
-deadline. The release is one idempotent `UPDATE`, so several API processes
-running it is harmless. Analytics leaves released bookings out of popular
-resources and peak hours, because their hours can be booked a second time.
+Check-in opens at the scheduled start and closes at the reservation end, as does
+the review window for a pending request. At that deadline
+`BookingReleaseScheduler` closes unused bookings: it runs
+`releaseMissedDeadlines()` every `BOOKING_RELEASE_INTERVAL_SECONDS` (60 by
+default), which marks a confirmed booking staff have not checked in as
+`no_show` with no staff actor, and a request nobody reviewed as `expired`.
+Showing the confirmation without staff recording arrival does not prevent a
+no-show. Staff can also record a no-show from the scheduled end. The update is
+idempotent, so several API processes running it is harmless. Analytics excludes
+automatically released no-shows from demand figures.
 
 ---
 
@@ -348,11 +347,11 @@ flowchart LR
     needs -->|"no, a room"| confirmed
     review -->|approve| confirmed
     review -->|"reject with a reason"| rejected
-    review -->|"nobody decides by start + 15 min"| expired
+    review -->|"nobody decides by scheduled end"| expired
 
     confirmed --> arrive
     arrive -->|"cancels first"| cancelled
-    arrive -->|"not checked in 15 min after start"| noshow
+    arrive -->|"not checked in by scheduled end"| noshow
     arrive -->|yes| verify --> checkedin --> out --> completed
 
     pending -.-> push
@@ -650,7 +649,7 @@ Relative to `http://localhost:18320/api`. Swagger UI: `/api/docs`.
 | `GET`    | `/staff/bookings/operations`                     | staff, admin         | Today's operations board                  |
 | `GET`    | `/staff/bookings/resources/:resourceId/schedule` | staff, admin         | One resource's day                        |
 | `GET`    | `/staff/bookings/:id`                            | staff, admin         | Booking detail for review                 |
-| `PATCH`  | `/staff/bookings/:id/approve`                    | staff, admin         | Approve, until 15 min after the start     |
+| `PATCH`  | `/staff/bookings/:id/approve`                    | staff, admin         | Approve, until the scheduled end     |
 | `PATCH`  | `/staff/bookings/:id/reject`                     | staff, admin         | Reject with a reason                      |
 | `PATCH`  | `/staff/bookings/:id/confirm-check-in`           | staff, admin         | Confirm arrival after matching booking    |
 | `PATCH`  | `/staff/bookings/:id/check-out`                  | staff, admin         | Complete a checked-in booking             |
@@ -678,7 +677,7 @@ Swagger decorators are part of the definition of done for any endpoint change.
 | Database         | `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME`, `DB_SYNCHRONIZE`, `DB_LOGGING`                                                                |
 | Auth             | `AUTH_JWT_SECRET` (32+ characters, required), `AUTH_TOKEN_EXPIRES_IN`, `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE`, `AUTH_COOKIE_SECURE`, `AUTH_BCRYPT_ROUNDS` |
 | Rate limits      | `THROTTLE_TTL`, `THROTTLE_LIMIT`, `AUTH_THROTTLE_LIMIT`                                                                                                              |
-| Bookings         | `BOOKING_RELEASE_INTERVAL_SECONDS` (60; 0 turns off the missed check-in release)                                                                                    |
+| Bookings         | `BOOKING_RELEASE_INTERVAL_SECONDS` (60; 0 turns off automatic end-of-reservation cleanup)                                                                                    |
 | Startup accounts | `BOOTSTRAP_ADMIN_*`, `BOOTSTRAP_STAFF_*`                                                                                                                               |
 | Runtime          | `NODE_ENV`, `API_PREFIX`, `DOCKER_SUBNET`                                                                                                                            |
 

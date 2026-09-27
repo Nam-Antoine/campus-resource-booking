@@ -64,7 +64,7 @@ import { BookingStatus } from '../enums/booking-status.enum';
 )
 @Check(
   'CHK_bookings_no_show_timeline',
-  `"no_show_at" IS NULL OR "no_show_at" >= (("booking_date" + "start_time") AT TIME ZONE 'Asia/Ho_Chi_Minh') + INTERVAL '15 minutes'`,
+  `"no_show_at" IS NULL OR "no_show_at" >= (("booking_date" + "end_time") AT TIME ZONE 'Asia/Ho_Chi_Minh')`,
 )
 @Check(
   'CHK_bookings_checked_in_state',

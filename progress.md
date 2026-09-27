@@ -90,8 +90,8 @@ Use this file to track feature completion. Plan implementation details separatel
 - [x] Staff check-out confirmation
 - [x] Track no-show and completed status
 - [x] Prevent out-of-window or repeated staff check-in
-- [x] Release a booking not checked in 15 minutes after its start
-- [x] Expire a request not reviewed 15 minutes after its start
+- [x] Record a no-show for a booking not checked in by its scheduled end
+- [x] Expire a request not reviewed by its scheduled end
 
 ### 9. Live dashboard data
 

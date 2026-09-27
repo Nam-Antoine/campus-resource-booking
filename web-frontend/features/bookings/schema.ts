@@ -59,16 +59,14 @@ function isAtOrAfter(left: string | null, right: string | null): boolean {
   );
 }
 
-const CHECK_IN_GRACE_MS = 15 * 60 * 1000;
-
-/** A no-show is recorded no earlier than the check-in deadline, start + 15 min. */
-function isBeforeCheckInDeadline(
+/** Historical no-shows from the old 15-minute policy remain valid after upgrading. */
+function isBeforeLegacyNoShowDeadline(
   instant: string,
   date: string,
   startTime: string,
 ): boolean {
   const startMs = new Date(`${date}T${startTime}:00+07:00`).getTime();
-  return new Date(instant).getTime() < startMs + CHECK_IN_GRACE_MS;
+  return new Date(instant).getTime() < startMs + 15 * 60 * 1000;
 }
 
 function parseBookingResource(value: unknown): BookingResourceSummary | null {
@@ -221,7 +219,7 @@ export function parseStudentBooking(value: unknown): StudentBooking | null {
     !isAtOrAfter(checkedInAt, checkInRequestedAt) ||
     !isAtOrAfter(checkedOutAt, checkedInAt) ||
     (noShowAt !== null &&
-      isBeforeCheckInDeadline(noShowAt, date, startTime)) ||
+      isBeforeLegacyNoShowDeadline(noShowAt, date, startTime)) ||
     canRequestCheckIn ||
     (hasEnded && (canCancel || canRequestCheckIn))
   ) {
@@ -408,7 +406,7 @@ export function parseStaffBooking(value: unknown): StaffBooking | null {
           : checkedInAt !== null || checkedOutAt !== null || noShowAt !== null) ||
     !isAtOrAfter(checkedOutAt, checkedInAt) ||
     (noShowAt !== null &&
-      isBeforeCheckInDeadline(noShowAt, date, startTime)) ||
+      isBeforeLegacyNoShowDeadline(noShowAt, date, startTime)) ||
     (canConfirmCheckIn && status !== "confirmed") ||
     (canConfirmCheckIn && canMarkNoShow) ||
     (canCheckOut !== (status === "checked_in")) ||

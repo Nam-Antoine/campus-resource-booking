@@ -9,7 +9,7 @@ import { BookingsConfig, bookingsConfig } from '../config';
 import { BookingsService } from './bookings.service';
 
 /**
- * Periodically frees the slots of bookings whose check-in deadline passed
+ * Periodically closes bookings whose scheduled end passed
  * unused: missed check-ins become no-shows and unreviewed requests expire.
  * Each run is idempotent UPDATEs, so several API processes running it at once
  * is harmless.
@@ -54,7 +54,7 @@ export class BookingReleaseScheduler
       return released + expired;
     } catch (error: unknown) {
       this.logger.error(
-        'Releasing bookings past their check-in deadline failed',
+        'Closing bookings past their scheduled end failed',
         error instanceof Error ? error.stack : String(error),
       );
       return 0;

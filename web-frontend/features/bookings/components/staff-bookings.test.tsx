@@ -66,7 +66,7 @@ const booking: StaffBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
-  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  checkInDeadline: "2099-01-05T04:00:00.000Z",
   releasedAutomatically: false,
   resource: {
     id: "20000000-0000-4000-8000-000000000001",
@@ -298,7 +298,7 @@ describe("staff approval workflow", () => {
 
   it("tells staff the deadline for a pending decision", () => {
     render(<StaffBookingDetail user={staff} booking={booking} schedule={schedule} />);
-    expect(screen.getByText(/Decide by 09:15; after that the request cannot be reviewed/)).toBeVisible();
+    expect(screen.getByText(/Decide by 11:00; after that the request cannot be reviewed/)).toBeVisible();
   });
 
   it("shows elapsed pending requests as read-only", () => {
@@ -457,7 +457,7 @@ describe("staff approval workflow", () => {
       canReview: false,
       reviewedAt: "2099-01-04T02:00:00.000Z",
       reviewer: staff,
-      noShowAt: "2099-01-05T02:15:00.000Z",
+      noShowAt: "2099-01-05T04:00:00.000Z",
       releasedAutomatically: true,
     };
     render(
@@ -469,7 +469,7 @@ describe("staff approval workflow", () => {
     );
     expect(screen.getByRole("heading", { name: "Released automatically" })).toBeVisible();
     expect(screen.queryByText("No-show by staff")).not.toBeInTheDocument();
-    expect(screen.getByText("Released · not checked in by 09:15")).toBeVisible();
+    expect(screen.getByText("Released · not checked in by 11:00")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Mark as no-show" })).not.toBeInTheDocument();
   });
 

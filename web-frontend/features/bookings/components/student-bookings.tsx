@@ -76,9 +76,9 @@ function BookingRow({ booking }: { booking: StudentBooking }) {
         </span>
         <h3>{booking.resource.name}</h3>
         {isExpiredRequest(booking) ? (
-          <p className={styles.expiredNote}>Not reviewed before the check-in deadline. The request expired and its slot was released.</p>
+          <p className={styles.expiredNote}>Not reviewed before the reservation ended. The request expired and its slot was released.</p>
         ) : isReviewWindowClosed(booking) ? (
-          <p className={styles.expiredNote}>The review deadline passed. This request is still pending release; its slot may remain held until the system updates it.</p>
+          <p className={styles.expiredNote}>The reservation ended before review. This request is still pending release; its slot may remain held until the system updates it.</p>
         ) : null}
         <p>
           <ClockIcon /> {booking.startTime}–{booking.endTime} ICT
@@ -349,7 +349,7 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
             </h2>
             <p>
               {booking.status === "expired"
-                ? "Campus staff did not review this request within 15 minutes of its start, so it was never approved and its time was released for others. Send a new request for another time if you still need the resource."
+                ? "Campus staff did not review this request before its scheduled end, so it was never approved. Send a new request for another time if you still need the resource."
                 : isReviewWindowClosed(booking)
                   ? "Staff can no longer approve this request. It is still pending release, so its slot may remain held until the system records it as expired. Refresh this page to check its status before trying another time."
                 : isCheckInWindowClosed(booking)
@@ -360,16 +360,16 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
                   ? "The scheduled time has ended without a confirmed check-in, so the booking will be recorded as a no-show."
                   : "The scheduled time has ended, but checkout has not yet been recorded. Contact campus staff to complete the visit."
                 : booking.status === "pending"
-                ? `The time is held for you while staff review the request. If nobody approves it by ${campusClockTime(booking.checkInDeadline)}, 15 minutes after the start, the request expires and the time is released.`
+                ? `The time is held for you while staff review the request. If nobody approves it by the scheduled end at ${campusClockTime(booking.checkInDeadline)}, the request expires.`
                 : booking.status === "confirmed"
-                  ? `Show the booking confirmation on this page to campus staff at the resource. Staff must confirm your arrival by ${campusClockTime(booking.checkInDeadline)}, or the booking is released for others.`
+                  ? `Show the booking confirmation on this page to campus staff at the resource. Staff can confirm your arrival from the scheduled start until the end at ${campusClockTime(booking.checkInDeadline)}.`
                   : booking.status === "checked_in"
                     ? "Staff confirmed your arrival. Check out before leaving the resource."
                     : booking.status === "completed"
                       ? `Checked out ${booking.checkedOutAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(booking.checkedOutAt)) : ""}.`
                       : booking.status === "no_show"
                         ? booking.releasedAutomatically
-                          ? `Staff had not checked you in by ${campusClockTime(booking.checkInDeadline)}, 15 minutes after the start, so the booking was released. Any of its remaining whole hours can now be booked by others.`
+                          ? `Staff had not checked you in by the scheduled end at ${campusClockTime(booking.checkInDeadline)}, so the booking was recorded as a no-show.`
                           : "Staff recorded that this booking was not used."
                         : booking.status === "rejected"
                           ? booking.rejectionReason ?? "Staff could not approve this request."

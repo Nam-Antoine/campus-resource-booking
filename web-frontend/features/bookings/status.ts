@@ -40,7 +40,7 @@ export function studentStatusLabel(
   return studentStatusLabels[studentDisplayStatus(booking)];
 }
 
-/** A campus-time clock reading such as "09:15", for check-in deadlines. */
+/** A campus-time clock reading such as "10:00", for reservation end times. */
 export function campusClockTime(value: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",

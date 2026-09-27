@@ -51,13 +51,13 @@ flowchart LR
 - **Availability grid**: the free hourly slots for a day. When someone else books a slot, it **disappears live**.
 - **Book** whole hours within opening hours, such as 09:00–11:00. The booking is confirmed at once, or goes to *pending* if the resource needs staff approval.
 - **My bookings**: upcoming bookings and history, with cancellation while eligible and a confirmation for approved bookings.
-- **Check-in**: show the confirmed booking in your signed-in account to staff. Staff match its details with their live record and confirm arrival between 15 minutes before and 15 minutes after the start.
+- **Check-in**: show the confirmed booking in your signed-in account to staff. Staff match its details with their live record and confirm arrival from the scheduled start until the reservation ends.
 
 ### 🧑‍💼 Staff
-- **Approval queue**: pending requests, oldest first, each approved or rejected with a reason, until 15 minutes after the start.
+- **Approval queue**: pending requests, oldest first, each approved or rejected with a reason, until the reservation ends.
 - **Operations list**: today's bookings, plus earlier visits still waiting for check-out.
 - **Check-in**: compare the student's confirmation and identity with the staff booking record, then confirm arrival in the system. **Check-out** when the student leaves.
-- **Automatic release**: a confirmed booking that staff have not checked in 15 minutes after its start becomes a no-show on its own, and any of its remaining whole hours can be booked again. Staff can also mark the no-show themselves from that moment.
+- **Automatic release**: a confirmed booking not checked in by its scheduled end becomes a no-show automatically. Staff can also record the no-show once the reservation ends.
 - **Resource schedule**: every booking on a resource for a chosen day.
 
 ### 🛠️ Admin
@@ -75,10 +75,10 @@ stateDiagram-v2
     Pending --> Confirmed: staff approves
     Pending --> Rejected: staff rejects (with reason)
     Pending --> Cancelled: student cancels
-    Pending --> Expired: not reviewed 15 min after start (automatic)
+    Pending --> Expired: not reviewed by scheduled end (automatic)
     Confirmed --> Cancelled: student cancels while eligible
     Confirmed --> CheckedIn: staff matches confirmation and confirms arrival
-    Confirmed --> NoShow: not checked in 15 min after start (automatic)
+    Confirmed --> NoShow: not checked in by scheduled end (automatic)
     CheckedIn --> Completed: staff checks out
     Rejected --> [*]
     Cancelled --> [*]
@@ -87,9 +87,9 @@ stateDiagram-v2
     Completed --> [*]
 ```
 
-A pending request that nobody approves or rejects within 15 minutes of its start **expires**, and its time is released like a missed check-in.
+A pending request that nobody approves or rejects by its scheduled end **expires**, and its time is released like a missed check-in.
 
-*Pending*, *confirmed* and *checked in* bookings **hold the slot**, so nobody else can book an overlapping time. Cancelled, rejected, expired and released bookings free it again.
+*Pending*, *confirmed* and *checked in* bookings **hold the slot**, so nobody else can book an overlapping time. Cancelled and rejected bookings free future time. Expiry and no-show happen at the scheduled end, so their elapsed hours cannot be rebooked.
 
 ## Main flow: from search to check-in
 

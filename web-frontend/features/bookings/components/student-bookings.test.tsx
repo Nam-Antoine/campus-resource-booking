@@ -46,7 +46,7 @@ const booking: StudentBooking = {
   checkedInAt: null,
   checkedOutAt: null,
   noShowAt: null,
-  checkInDeadline: "2099-01-05T02:15:00.000Z",
+  checkInDeadline: "2099-01-05T04:00:00.000Z",
   releasedAutomatically: false,
   cancelledAt: null,
   reviewedAt: null,
@@ -116,7 +116,7 @@ describe("student booking management", () => {
 
   it("tells the student when staff check-in closes and that the booking is then released", () => {
     render(<StudentBookingDetail user={user} booking={booking} />);
-    expect(screen.getByText(/must confirm your arrival by 09:15, or the booking is released for others/)).toBeVisible();
+    expect(screen.getByText(/can confirm your arrival from the scheduled start until the end at 11:00/)).toBeVisible();
   });
 
   it("explains a booking released because check-in was missed", () => {
@@ -127,7 +127,7 @@ describe("student booking management", () => {
           ...booking,
           status: "no_show",
           canCancel: false,
-          noShowAt: "2099-01-05T02:15:00.000Z",
+          noShowAt: "2099-01-05T04:00:00.000Z",
           releasedAutomatically: true,
         }}
       />,
@@ -135,7 +135,7 @@ describe("student booking management", () => {
     expect(
       screen.getByRole("heading", { name: "Released: check-in was not confirmed in time" }),
     ).toBeVisible();
-    expect(screen.getByText(/had not checked you in by 09:15/)).toBeVisible();
+    expect(screen.getByText(/had not checked you in by the scheduled end at 11:00/)).toBeVisible();
   });
 
   it("explains a passed review deadline without claiming a pending slot was released", () => {
@@ -163,7 +163,7 @@ describe("student booking management", () => {
       screen.getByRole("heading", { name: "Request expired without review" }),
     ).toBeVisible();
     expect(
-      screen.getByText(/within 15 minutes of its start, so it was never approved and its time was released/),
+      screen.getByText(/before its scheduled end, so it was never approved/),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: "Cancel booking" })).not.toBeInTheDocument();
   });
@@ -176,7 +176,7 @@ describe("student booking management", () => {
       />,
     );
     expect(
-      screen.getByText(/If nobody approves it by 09:15, 15 minutes after the start, the request expires/),
+      screen.getByText(/If nobody approves it by the scheduled end at 11:00, the request expires/),
     ).toBeVisible();
   });
 

@@ -71,13 +71,13 @@ export class StudentBookingResponseDto {
 
   @ApiProperty({
     description:
-      'When check-in closes: 15 minutes after the start. A confirmed booking not checked in by staff by then is released.',
+      'Scheduled reservation end. Staff can confirm arrival from the start until this time; unused bookings are then released.',
   })
   checkInDeadline: Date;
 
   @ApiProperty({
     description:
-      'True when the booking was released automatically because nobody checked in by the deadline',
+      'True when the booking was marked no-show automatically after its scheduled end',
   })
   releasedAutomatically: boolean;
 
