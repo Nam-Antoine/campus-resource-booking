@@ -116,7 +116,7 @@ sequenceDiagram
     S->>API: Reload "My bookings"
     API-->>S: Status: Confirmed
     S->>T: Shows booking confirmation in signed-in account
-    T->>API: Match booking details; PATCH …/confirm-check-in
+    T->>API: Match booking details and PATCH …/confirm-check-in
     API-->>T: Checked in ✔
 ```
 
