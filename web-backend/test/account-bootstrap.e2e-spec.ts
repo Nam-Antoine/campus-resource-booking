@@ -91,5 +91,18 @@ describe('Startup account bootstrap (e2e)', () => {
       role: UserRole.STUDENT,
       is_active: true,
     });
+
+    // A bootstrap email matching a self-registered account never grants admin.
+    await expect(
+      bootstrap.provision(UserRole.ADMIN, {
+        email: STUDENT_EMAIL,
+        password: 'another-bootstrap-password',
+        fullName: 'Bootstrap Administrator',
+      }),
+    ).resolves.toBe('unchanged');
+    await expect(roleOf(STUDENT_EMAIL)).resolves.toEqual({
+      role: UserRole.STUDENT,
+      is_active: true,
+    });
   });
 });

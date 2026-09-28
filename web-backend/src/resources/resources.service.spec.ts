@@ -81,6 +81,10 @@ describe('ResourcesService', () => {
     getManyAndCount: jest.Mock;
   };
   let service: ResourcesService;
+  let availabilityEvents: {
+    notifyAvailabilityChanged: jest.Mock;
+    notifyResourceChanged: jest.Mock;
+  };
 
   beforeEach(() => {
     queryBuilder = {
@@ -182,7 +186,7 @@ describe('ResourcesService', () => {
       find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn().mockReturnValue(bookingQuery),
     };
-    const availabilityEvents = {
+    availabilityEvents = {
       notifyAvailabilityChanged: jest.fn(),
       notifyResourceChanged: jest.fn(),
     };
@@ -588,6 +592,20 @@ describe('ResourcesService', () => {
     });
   });
 
+  it('notifies dashboards when a new resource is available', async () => {
+    const created = await service.create({
+      code: 'ROOM-A103',
+      name: 'Study Room A103',
+      type: ResourceType.ROOM,
+      capacity: 8,
+      location: 'First floor',
+      buildingId: building.id,
+    });
+    expect(availabilityEvents.notifyResourceChanged).toHaveBeenCalledWith(
+      created.id,
+    );
+  });
+
   it('updates status without writing stale detail fields', async () => {
     await service.updateStatus(resource, ResourceStatus.MAINTENANCE);
 
@@ -731,7 +749,8 @@ describe('ResourcesService', () => {
       });
       expectConflictQuery({
         closureDate: '2026-09-18',
-        blockingStatuses: ['pending', 'confirmed', 'checked_in'],
+        reviewableStatuses: ['pending', 'confirmed'],
+        checkedInStatus: 'checked_in',
       });
       expect(closuresRepository.save).not.toHaveBeenCalled();
     });
@@ -765,6 +784,7 @@ describe('ResourcesService', () => {
       });
       expectConflictQuery({
         reviewableStatuses: ['pending', 'confirmed'],
+        checkedInStatus: 'checked_in',
         operatingDays: [1, 2, 3],
         opensAt: '10:00',
         closesAt: '18:00',

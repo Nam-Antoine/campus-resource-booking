@@ -569,6 +569,33 @@ describe("AdminResourceManager", () => {
     );
   });
 
+  it("remounts the editable catalog when the URL page changes", () => {
+    const nextResource = {
+      ...resource,
+      id: "20000000-0000-4000-8000-000000000002",
+      name: "Study Room B202",
+    };
+    const view = render(
+      <AdminResourceManager
+        key={1}
+        user={user}
+        page={{ items: [resource], total: 21, page: 1, pageSize: 20, totalPages: 2 }}
+        buildings={[building]}
+      />,
+    );
+    view.rerender(
+      <AdminResourceManager
+        key={2}
+        user={user}
+        page={{ items: [nextResource], total: 21, page: 2, pageSize: 20, totalPages: 2 }}
+        buildings={[building]}
+      />,
+    );
+    expect(screen.getByText("Study Room B202")).toBeVisible();
+    expect(screen.queryByText("Study Room A101")).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Resource catalog pages" })).toHaveTextContent("Page 2 of 2");
+  });
+
   it("marks the unavailable pagination direction as disabled", () => {
     renderManager([resource], { total: 21, page: 2, totalPages: 2 });
     const nav = screen.getByRole("navigation", {

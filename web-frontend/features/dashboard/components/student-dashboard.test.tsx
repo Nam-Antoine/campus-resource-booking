@@ -114,6 +114,11 @@ describe("student live dashboard", () => {
     );
 
     expect(screen.getByText("1 shown · 4 active resources")).toBeVisible();
+    expect(screen.getByRole("group", { name: /Resource availability for/ })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    expect(screen.getByText("Swipe or use arrow keys to see later hours.")).toBeVisible();
     expect(screen.getAllByText("Study Room A101")).toHaveLength(3);
     expect(
       screen.getByRole("img", {
@@ -136,6 +141,52 @@ describe("student live dashboard", () => {
       `/bookings/${timeline.upcoming[0].id}`,
     );
     expect(screen.queryByText("Interface preview")).not.toBeInTheDocument();
+  });
+
+  it("includes early operating hours in the comparison", () => {
+    render(
+      <StudentDashboard
+        user={user}
+        timeline={{ upcoming: [], history: [] }}
+        resources={[{
+          resource: { ...resource, opensAt: "06:00" },
+          availability: {
+            ...availability,
+            opensAt: "06:00",
+            slots: [{ startTime: "06:00", endTime: "07:00" }, ...availability.slots],
+          },
+        }]}
+        totalResources={1}
+        campusDate="2099-01-05"
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Study Room A101, 06:00 to 08:00, partly open" })).toBeVisible();
+  });
+
+  it("shows an evening-only resource as available through closing at 23:00", () => {
+    render(
+      <StudentDashboard
+        user={user}
+        timeline={{ upcoming: [], history: [] }}
+        resources={[{
+          resource: { ...resource, opensAt: "20:00", closesAt: "23:00" },
+          availability: {
+            ...availability,
+            opensAt: "20:00",
+            closesAt: "23:00",
+            slots: [
+              { startTime: "20:00", endTime: "21:00" },
+              { startTime: "21:00", endTime: "22:00" },
+              { startTime: "22:00", endTime: "23:00" },
+            ],
+          },
+        }]}
+        totalResources={1}
+        campusDate="2099-01-05"
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Study Room A101, 20:00 to 22:00, open" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Study Room A101, 22:00 to 23:00, open" })).toBeVisible();
   });
 
   it("gives useful empty states without claiming live inventory", () => {

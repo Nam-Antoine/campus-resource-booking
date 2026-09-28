@@ -243,7 +243,7 @@
 
 .textButton,
 .editButton {
-  min-height: 38px;
+  min-height: 44px;
   padding: 7px 10px;
   color: var(--usth-blue);
   border: 0;

@@ -64,7 +64,8 @@ services:
       BOOTSTRAP_STAFF_PASSWORD: ${BOOTSTRAP_STAFF_PASSWORD:-}
       BOOTSTRAP_STAFF_NAME: ${BOOTSTRAP_STAFF_NAME:-}
     ports:
-      - "${BACKEND_PORT:-18320}:18320"
+      # Only the trusted host proxy (or local development) may reach the API.
+      - "127.0.0.1:${BACKEND_PORT:-18320}:18320"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:$${PORT}/$${API_PREFIX}/health"]
       interval: 10s

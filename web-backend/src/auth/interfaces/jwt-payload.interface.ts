@@ -6,6 +6,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
+  sessionVersion: number;
 }
 
 /** Registered claims added by the signing library. */

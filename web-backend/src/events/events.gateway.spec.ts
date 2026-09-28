@@ -83,11 +83,13 @@ describe('EventsGateway', () => {
   function validSession(expiresInSeconds = 900) {
     jwtService.verify.mockReturnValue({
       sub: USER_ID,
+      sessionVersion: 0,
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
     });
     usersService.findById.mockResolvedValue({
       id: USER_ID,
       isActive: true,
+      sessionVersion: 0,
     } as User);
   }
 
@@ -125,6 +127,18 @@ describe('EventsGateway', () => {
       const client = fakeSocket('session.token=valid');
       validSession();
       usersService.findById.mockResolvedValue({ isActive: false } as User);
+      await gateway.handleConnection(asSocket(client));
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('rejects a session revoked before account reactivation', async () => {
+      const client = fakeSocket('session.token=old');
+      validSession();
+      usersService.findById.mockResolvedValue({
+        id: USER_ID,
+        isActive: true,
+        sessionVersion: 1,
+      } as User);
       await gateway.handleConnection(asSocket(client));
       expect(client.disconnect).toHaveBeenCalledWith(true);
     });

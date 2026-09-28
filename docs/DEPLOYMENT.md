@@ -7,19 +7,21 @@ The default Compose setup is for local development over HTTP. This page covers w
 - Terminate HTTPS at a trusted reverse proxy.
 - Generate the JWT secret (`openssl rand -base64 48`) and keep all secrets in the platform's secret store, not in a committed `.env`.
 - Serve the frontend and API from the same site. Cross-site session cookies are unsupported until unsafe requests have CSRF protection.
-- Keep PostgreSQL off the public network. Compose publishes it on `127.0.0.1` only; remove the port mapping entirely if nothing on the host needs it.
-- Take a backup and complete a restore drill (below) before real data arrives.
+- Keep PostgreSQL and the API off the public network. Compose binds both to `127.0.0.1`; put only the trusted HTTPS reverse proxy on the public interface. Do not expose the backend directly while production trusts a forwarded client address for rate limiting. Remove the PostgreSQL port mapping entirely if nothing on the host needs it.
+- Replace the example `DB_PASSWORD=postgres` with a unique generated database password before initializing a production volume. Store it with the JWT secret; setting `POSTGRES_PASSWORD` after initialization does **not** rotate the existing database user—rotate it deliberately in PostgreSQL and update the application secret. Take a backup and complete a restore drill (below) before real data arrives.
 
 At minimum, set in `.env`:
 
 ```env
 NODE_ENV=production
+DB_PASSWORD=<generated-unique-database-password>
+AUTH_JWT_SECRET=<generated-secret-at-least-32-characters>
 AUTH_COOKIE_SECURE=true
 CORS_ORIGINS=https://your-frontend.example
 NEXT_PUBLIC_API_URL=https://your-api.example/api
 ```
 
-`NEXT_PUBLIC_API_URL` is compiled into the frontend, so rebuild after changing it: `docker compose up -d --build`.
+`NEXT_PUBLIC_API_URL` is compiled into the frontend, so rebuild after changing it: `docker compose up -d --build`. Back up the database first. Migration `1727200000000-RevokeDeactivatedSessions` adds a session version to existing users without discarding their booking history; pre-upgrade cookies lacking that claim are intentionally invalid and users must sign in again. For a release, follow the [Docker build, migration/startup and health smoke gate](MVP_RELEASE.md#4-docker-deployment-gate); CI also runs a disposable compiled-container startup and restart check.
 
 ## Upgrading from code-based check-in
 

@@ -93,7 +93,11 @@ export class EventsGateway
       const payload = this.jwtService.verify<JwtPayloadWithTiming>(rawToken);
 
       const user = await this.usersService.findById(payload.sub);
-      if (!user || !user.isActive) {
+      if (
+        !user ||
+        !user.isActive ||
+        payload.sessionVersion !== user.sessionVersion
+      ) {
         client.disconnect(true);
         return;
       }

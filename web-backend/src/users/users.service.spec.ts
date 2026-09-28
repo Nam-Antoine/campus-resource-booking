@@ -64,6 +64,7 @@ describe('UsersService', () => {
       id: '50000000-0000-4000-8000-000000000002',
       role: UserRole.STUDENT,
       isActive: true,
+      sessionVersion: 0,
     } as User;
 
     function managedService(activeAdmins = 2) {
@@ -109,6 +110,12 @@ describe('UsersService', () => {
         managed.updateStatus(actor.id, target.id, false),
       ).resolves.toMatchObject({ id: target.id, isActive: false });
       expect(published).toEqual([target.id]);
+    });
+
+    it('increments the session version only when an active account is deactivated', async () => {
+      const { managed } = managedService();
+      const result = await managed.updateStatus(actor.id, target.id, false);
+      expect(result.sessionVersion).toBe(1);
     });
 
     it('does not publish when an account is activated', async () => {
@@ -290,7 +297,7 @@ describe('UsersService', () => {
       expect(harness.repository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
-    it('promotes and reactivates the configured admin when no active admin exists', async () => {
+    it('never promotes an existing student even with no active admin', async () => {
       const harness = bootstrapHarness({
         existing: { id: 'u1', role: UserRole.STUDENT, isActive: false },
         activeAdmins: 0,
@@ -298,13 +305,30 @@ describe('UsersService', () => {
 
       await expect(
         harness.service.provisionBootstrapAccount(account),
-      ).resolves.toBe('promoted');
+      ).resolves.toBe('unchanged');
+      expect(harness.repository.update).not.toHaveBeenCalled();
+    });
+
+    it('reactivates an existing administrator when no active admin exists', async () => {
+      const harness = bootstrapHarness({
+        existing: {
+          id: 'u1',
+          role: UserRole.ADMIN,
+          isActive: false,
+          sessionVersion: 2,
+        },
+        activeAdmins: 0,
+      });
+
+      await expect(
+        harness.service.provisionBootstrapAccount(account),
+      ).resolves.toBe('reactivated');
       expect(harness.repository.count).toHaveBeenCalledWith({
         where: { role: UserRole.ADMIN, isActive: true },
       });
       expect(harness.repository.update).toHaveBeenCalledWith('u1', {
-        role: UserRole.ADMIN,
         isActive: true,
+        sessionVersion: 3,
       });
     });
 

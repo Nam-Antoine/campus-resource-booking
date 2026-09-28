@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import {
@@ -25,13 +25,19 @@ import type {
 } from "@/features/resources/types";
 import styles from "./student-dashboard.module.css";
 
-const availabilityBands = [
+const allAvailabilityBands = [
+  { startTime: "00:00", endTime: "02:00" },
+  { startTime: "02:00", endTime: "04:00" },
+  { startTime: "04:00", endTime: "06:00" },
+  { startTime: "06:00", endTime: "08:00" },
   { startTime: "08:00", endTime: "10:00" },
   { startTime: "10:00", endTime: "12:00" },
   { startTime: "12:00", endTime: "14:00" },
   { startTime: "14:00", endTime: "16:00" },
   { startTime: "16:00", endTime: "18:00" },
   { startTime: "18:00", endTime: "20:00" },
+  { startTime: "20:00", endTime: "22:00" },
+  { startTime: "22:00", endTime: "23:00" },
 ] as const;
 
 const resourceTypeLabels: Record<ResourceType, string> = {
@@ -74,13 +80,16 @@ function availabilityState(
 ): "open" | "partial" | "unavailable" {
   if (availability.blockedReason) return "unavailable";
   const startHour = Number(startTime.slice(0, 2));
-  const expectedStarts = [startHour, startHour + 1].map(
+  const expectedStarts = Array.from(
+    { length: startTime === "22:00" ? 1 : 2 },
+    (_, offset) => startHour + offset,
+  ).map(
     (hour) => `${String(hour).padStart(2, "0")}:00`,
   );
   const availableHours = expectedStarts.filter((hour) =>
     availability.slots.some((slot) => slot.startTime === hour),
   ).length;
-  return availableHours === 2
+  return availableHours === expectedStarts.length
     ? "open"
     : availableHours === 1
       ? "partial"
@@ -121,6 +130,24 @@ export function StudentDashboard({
 }: StudentDashboardProps) {
   const initials = getInitials(user.fullName);
   const nextBooking = timeline.upcoming[0];
+  const firstOpening = resources.reduce(
+    (earliest, { availability }) =>
+      availability.opensAt < earliest ? availability.opensAt : earliest,
+    "23:00",
+  );
+  const lastClosing = resources.reduce(
+    (latest, { availability }) =>
+      availability.closesAt > latest ? availability.closesAt : latest,
+    "00:00",
+  );
+  const availabilityBands = allAvailabilityBands.filter(
+    ({ startTime, endTime }) => endTime > firstOpening && startTime < lastClosing,
+  );
+  const boardStyle = {
+    "--band-count": availabilityBands.length,
+    "--board-min-width": `${145 + availabilityBands.length * 65}px`,
+  } as CSSProperties;
+  const isWideSchedule = availabilityBands.length > 2;
 
   return (
     <main className={styles.page}>
@@ -224,54 +251,69 @@ export function StudentDashboard({
                 {resources.length} shown · {totalResources} active resources
               </span>
             </div>
-            
+
             {liveRegion}
 
             {resources.length ? (
-              <div
-                className={styles.schedule}
-                role="group"
-                aria-label={`Resource availability for ${formatCampusDate(campusDate)}`}
-              >
-                <div className={styles.timeScale} aria-hidden="true">
-                  <span />
-                  {availabilityBands.map((band) => (
-                    <time key={band.startTime}>{band.startTime}</time>
+              <>
+                {isWideSchedule && (
+                  <p
+                    id="availability-scroll-hint"
+                    className={styles.scheduleHint}
+                  >
+                    Swipe or use arrow keys to see later hours.
+                  </p>
+                )}
+                <div
+                  className={styles.schedule}
+                  style={boardStyle}
+                  role="group"
+                  tabIndex={isWideSchedule ? 0 : undefined}
+                  aria-describedby={
+                    isWideSchedule ? "availability-scroll-hint" : undefined
+                  }
+                  aria-label={`Resource availability for ${formatCampusDate(campusDate)}`}
+                >
+                  <div className={styles.timeScale} aria-hidden="true">
+                    <span />
+                    {availabilityBands.map((band) => (
+                      <time key={band.startTime}>{band.startTime}</time>
+                    ))}
+                  </div>
+                  {resources.map(({ resource, availability }) => (
+                    <div className={styles.scheduleRow} key={resource.id}>
+                      <div className={styles.resourceIdentity}>
+                        <strong>{resource.name}</strong>
+                        <small>
+                          {resource.building.code} · Capacity {resource.capacity}
+                        </small>
+                      </div>
+                      <div className={styles.slots}>
+                        {availabilityBands.map((band) => {
+                          const state = availabilityState(
+                            availability,
+                            band.startTime,
+                          );
+                          return (
+                            <span
+                              className={
+                                state === "open"
+                                  ? styles.openSlot
+                                  : state === "partial"
+                                    ? styles.partialSlot
+                                    : styles.unavailableSlot
+                              }
+                              key={`${resource.id}-${band.startTime}`}
+                              role="img"
+                              aria-label={`${resource.name}, ${band.startTime} to ${band.endTime}, ${state === "open" ? "open" : state === "partial" ? "partly open" : "unavailable"}`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   ))}
                 </div>
-                {resources.map(({ resource, availability }) => (
-                  <div className={styles.scheduleRow} key={resource.id}>
-                    <div className={styles.resourceIdentity}>
-                      <strong>{resource.name}</strong>
-                      <small>
-                        {resource.building.code} · Capacity {resource.capacity}
-                      </small>
-                    </div>
-                    <div className={styles.slots}>
-                      {availabilityBands.map((band) => {
-                        const state = availabilityState(
-                          availability,
-                          band.startTime,
-                        );
-                        return (
-                          <span
-                            className={
-                              state === "open"
-                                ? styles.openSlot
-                                : state === "partial"
-                                  ? styles.partialSlot
-                                  : styles.unavailableSlot
-                            }
-                            key={`${resource.id}-${band.startTime}`}
-                            role="img"
-                            aria-label={`${resource.name}, ${band.startTime} to ${band.endTime}, ${state === "open" ? "open" : state === "partial" ? "partly open" : "unavailable"}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              </>
             ) : (
               <div className={styles.noAvailability}>
                 <ClockIcon />

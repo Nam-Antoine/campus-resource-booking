@@ -15,8 +15,8 @@ type BootstrapRole = UserRole.ADMIN | UserRole.STAFF;
 /**
  * Provisions the admin and staff accounts named by `BOOTSTRAP_ADMIN_*` and
  * `BOOTSTRAP_STAFF_*` at startup. Missing accounts are created when a password
- * is configured; existing accounts are left as they are (see
- * UsersService.provisionBootstrapAccount for the admin recovery exception).
+ * is configured; an inactive administrator may be reactivated when no active
+ * admin remains, but an existing student or staff account is never promoted.
  */
 @Injectable()
 export class AccountBootstrapService implements OnApplicationBootstrap {
@@ -62,9 +62,9 @@ export class AccountBootstrapService implements OnApplicationBootstrap {
       case 'created':
         this.logger.log(`Created ${role} account ${email} from ${variable}.`);
         return;
-      case 'promoted':
+      case 'reactivated':
         this.logger.log(
-          `Promoted ${email} to administrator from ${variable}: no active administrator existed.`,
+          `Reactivated administrator ${email} from ${variable}: no active administrator existed.`,
         );
         return;
       case 'already-provisioned':
@@ -77,12 +77,12 @@ export class AccountBootstrapService implements OnApplicationBootstrap {
         return;
       case 'unchanged':
         this.logger.warn(
-          `${variable} ${email} already exists with a different role or status; it was not changed. Manage it from the admin console.`,
+          `${variable} ${email} already exists with a different role or status; it was not changed. A non-admin account cannot be promoted at startup.`,
         );
         return;
       case 'account-missing':
         this.logger.warn(
-          `${variable} ${email} has no account yet. Set BOOTSTRAP_${role.toUpperCase()}_PASSWORD to create it, or register it and restart the backend.`,
+          `${variable} ${email} has no account yet. Set BOOTSTRAP_${role.toUpperCase()}_PASSWORD to create it. Do not self-register a bootstrap administrator.`,
         );
         return;
     }

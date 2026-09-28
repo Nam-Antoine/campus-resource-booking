@@ -325,9 +325,15 @@ describe('Admin user and staff account management (e2e)', () => {
       .set('Cookie', adminCookie)
       .send({ isActive: true })
       .expect(200);
-    await api()
+    // Deactivation revoked the original signed session, even after reactivation.
+    await api().get('/api/auth/me').set('Cookie', studentCookie).expect(401);
+    const newSession = await api()
       .post('/api/auth/login')
       .send({ email: STUDENT_EMAIL, password: PASSWORD })
+      .expect(200);
+    await api()
+      .get('/api/auth/me')
+      .set('Cookie', findSetCookie(newSession.headers, COOKIE_NAME) as string)
       .expect(200);
   });
 

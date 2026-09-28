@@ -100,14 +100,19 @@ sequenceDiagram
 
 - Registration creates **students only**. The first admin and staff accounts come
   from `BOOTSTRAP_*` variables and are provisioned at backend startup by
-  `AccountBootstrapService`. Existing accounts are never modified — with one
-  deliberate exception: the named admin is restored if no active admin remains.
+  `AccountBootstrapService`. Existing passwords and roles are never modified;
+  only an existing inactive admin may be reactivated if no active admin remains.
+  Self-registered student accounts cannot become admin through bootstrap.
 - Later staff accounts are created by an admin (`POST /admin/users`) with an
   initial password. There is no endpoint that changes a role: an account keeps
   the role it was created with.
 - Only exact `@usth.edu.vn` addresses pass the auth DTOs.
 - `password_hash` is `select: false`; it is read only to verify a password.
 - A wrong password and an unknown email return the same status and the same body.
+- Deactivation (and bootstrap reactivation of an inactive admin) increments
+  `session_version`. REST and WebSocket authentication reject an older cookie
+  even if the account is later reactivated; pre-migration
+  cookies without the version must be replaced by signing in again.
 - Redirects after login pass through `getSafeRedirect`, which rejects
   protocol-relative, external, backslash, and control-character paths.
 
@@ -453,6 +458,7 @@ erDiagram
         varchar full_name
         enum role "student, staff, admin"
         boolean is_active
+        int session_version "revokes earlier cookies"
     }
 
     BUILDINGS {

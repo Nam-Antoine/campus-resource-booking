@@ -30,5 +30,6 @@ export default async function AdminResourcesPage({
   const lastPage = lastPageFor(catalog.page.totalPages);
   if (requestedPage > lastPage) redirect(adminResourcesHref(lastPage));
 
-  return <AdminResourceManager user={user} {...catalog} />;
+  // Remount URL-backed editable state when the catalog page changes.
+  return <AdminResourceManager key={requestedPage} user={user} {...catalog} />;
 }

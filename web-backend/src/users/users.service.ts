@@ -16,7 +16,7 @@ import { ACTIVE_ADMIN_ADVISORY_LOCK } from './users.constants';
 
 export type BootstrapAccountOutcome =
   | 'created'
-  | 'promoted'
+  | 'reactivated'
   | 'already-provisioned'
   | 'admin-exists'
   | 'unchanged'
@@ -36,6 +36,7 @@ export class UsersService {
     'fullName',
     'role',
     'isActive',
+    'sessionVersion',
     'createdAt',
     'updatedAt',
   ];
@@ -60,9 +61,10 @@ export class UsersService {
 
   /**
    * Creates a configured staff or admin account when it is missing. Existing
-   * accounts keep their password, role, and status, so changes made in the
-   * admin console survive restarts. The one exception is recovery: the
-   * configured admin is promoted and reactivated when no active admin exists.
+   * accounts keep their password and role. Status changes made in the admin
+   * console survive restarts except that an existing inactive administrator
+   * can be reactivated when no active admin exists.
+   * An existing student or staff account is never promoted at startup.
    */
   async provisionBootstrapAccount(
     data: BootstrapAccountData,
@@ -104,7 +106,7 @@ export class UsersService {
       if (existing.role === data.role && existing.isActive) {
         return 'already-provisioned';
       }
-      if (!isAdmin) return 'unchanged';
+      if (!isAdmin || existing.role !== UserRole.ADMIN) return 'unchanged';
 
       const activeAdmins = await repository.count({
         where: { role: UserRole.ADMIN, isActive: true },
@@ -112,10 +114,11 @@ export class UsersService {
       if (activeAdmins > 0) return 'admin-exists';
 
       await repository.update(existing.id, {
-        role: UserRole.ADMIN,
         isActive: true,
+        // Recovery also revokes a session retained before external deactivation.
+        sessionVersion: existing.sessionVersion + 1,
       });
-      return 'promoted';
+      return 'reactivated';
     });
   }
 
@@ -181,6 +184,10 @@ export class UsersService {
       targetId,
       (target) => ({
         isActive,
+        sessionVersion:
+          !isActive && target.isActive
+            ? target.sessionVersion + 1
+            : target.sessionVersion,
         removesActiveAdmin:
           target.role === UserRole.ADMIN && target.isActive && !isActive,
       }),
@@ -202,7 +209,9 @@ export class UsersService {
   private async updateManagedUser(
     actorId: string,
     targetId: string,
-    change: (target: User) => Partial<Pick<User, 'isActive'>> & {
+    change: (target: User) => Partial<
+      Pick<User, 'isActive' | 'sessionVersion'>
+    > & {
       removesActiveAdmin: boolean;
     },
   ): Promise<User> {

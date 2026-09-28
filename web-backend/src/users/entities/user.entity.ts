@@ -31,6 +31,10 @@ export class User {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
+  /** Incremented on deactivation so earlier signed sessions cannot be reused. */
+  @Column({ name: 'session_version', type: 'integer', default: 0 })
+  sessionVersion = 0;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

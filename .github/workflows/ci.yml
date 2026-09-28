@@ -128,3 +128,41 @@ jobs:
         run: npm run typeorm -- schema:log | tee /tmp/schema.log && grep -q "Your schema is up to date" /tmp/schema.log
       - name: Run end-to-end tests
         run: npm run test:e2e -- --runInBand
+
+  container-startup:
+    name: Compiled container startup
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTH_JWT_SECRET: ci-only-container-secret-at-least-32-characters
+      DB_PASSWORD: ci-only-postgres-password
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build and start the compiled stack with migrations
+        run: docker compose up -d --build --wait
+      - name: Verify the migration and restart without reapplying it
+        run: |
+          set -euo pipefail
+          docker compose exec -T postgres psql -U postgres -d web_backend -v ON_ERROR_STOP=1 \
+            -c "SELECT session_version FROM users LIMIT 1"
+          docker compose exec -T backend node node_modules/typeorm/cli.js migration:show -d dist/database/data-source.js \
+            | tee /tmp/container-migrations-before.log
+          ! grep -q '\[ \]' /tmp/container-migrations-before.log
+          docker compose restart backend
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q backend)")" = healthy ]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q backend)")" = healthy
+          docker compose exec -T backend node node_modules/typeorm/cli.js migration:show -d dist/database/data-source.js \
+            | tee /tmp/container-migrations.log
+          ! grep -q '\[ \]' /tmp/container-migrations.log
+      - name: Show logs if startup fails
+        if: failure()
+        run: docker compose logs --tail=150
+      - name: Stop disposable stack
+        if: always()
+        run: docker compose down --volumes

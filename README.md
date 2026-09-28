@@ -52,8 +52,8 @@ BOOTSTRAP_STAFF_PASSWORD=<a strong password>
 ```
 
 - Accounts are created at backend startup if they don't exist yet (emails must be exact `@usth.edu.vn` addresses; passwords 8+ characters).
-- Existing accounts are never changed: editing the bootstrap password later has no effect. There is currently no in-app password-change/reset flow. Use disposable test accounts for demos; for a real compromised account, disable it and arrange a controlled credential-rotation procedure before restoring access. Do not assume a Compose restart rotates existing passwords.
-- If no active admin remains, the configured admin account is restored to admin at the next startup.
+- Existing passwords are never rotated by startup: editing a bootstrap password later has no effect. Existing student or staff accounts are **never promoted to admin** merely because their email matches the bootstrap setting. There is currently no in-app password-change/reset flow. Use disposable test accounts for demos; for a real compromised account, disable it and arrange a controlled credential-rotation procedure before restoring access. Do not assume a Compose restart rotates existing passwords.
+- If no active admin remains, an **existing inactive administrator** configured as the bootstrap admin is reactivated at the next startup. Deactivating an account revokes its existing sessions; reactivation requires a new sign-in. If no admin account exists, configure a new, unregistered email with a strong bootstrap password and restart.
 
 ## Booking confirmation and staff check-in
 

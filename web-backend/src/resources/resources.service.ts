@@ -237,7 +237,9 @@ export class ResourcesService {
 
     try {
       const saved = await this.resourcesRepository.save(resource);
-      return (await this.findById(saved.id)) as Resource;
+      const created = (await this.findById(saved.id)) as Resource;
+      this.availabilityEvents.notifyResourceChanged(saved.id);
+      return created;
     } catch (error: unknown) {
       this.rethrowPersistenceError(error);
     }
@@ -261,14 +263,18 @@ export class ResourcesService {
             await this.requireNoActiveBookings(
               manager,
               locked.id,
-              `booking.status IN (:...reviewableStatuses)
-                AND ${ENDS_AFTER_NOW}
+              `((booking.status IN (:...reviewableStatuses) AND ${ENDS_AFTER_NOW})
+                OR booking.status = :checkedInStatus)
                 AND (
                   NOT (CAST(EXTRACT(DOW FROM booking.date) AS integer) = ANY(CAST(:operatingDays AS integer[])))
                   OR booking.startTime < :opensAt
                   OR booking.endTime > :closesAt
                 )`,
-              { reviewableStatuses: REVIEWABLE_STATUSES, ...schedule },
+              {
+                reviewableStatuses: REVIEWABLE_STATUSES,
+                checkedInStatus: BookingStatus.CHECKED_IN,
+                ...schedule,
+              },
               (count) =>
                 `Resolve ${bookingCount(count)} outside the new operating schedule before saving it.`,
             );
@@ -385,9 +391,13 @@ export class ResourcesService {
             manager,
             resourceId,
             `booking.date = :closureDate
-              AND booking.status IN (:...blockingStatuses)
-              AND ${ENDS_AFTER_NOW}`,
-            { closureDate: dto.date, blockingStatuses: BLOCKING_STATUSES },
+              AND ((booking.status IN (:...reviewableStatuses) AND ${ENDS_AFTER_NOW})
+                OR booking.status = :checkedInStatus)`,
+            {
+              closureDate: dto.date,
+              reviewableStatuses: REVIEWABLE_STATUSES,
+              checkedInStatus: BookingStatus.CHECKED_IN,
+            },
             (count) =>
               `Resolve ${bookingCount(count)} before closing this resource on ${dto.date}.`,
           );
@@ -619,8 +629,6 @@ export class ResourcesService {
 
 /** Bookings that still hold a slot before check-in. */
 const REVIEWABLE_STATUSES = [BookingStatus.PENDING, BookingStatus.CONFIRMED];
-/** Bookings that block availability. */
-const BLOCKING_STATUSES = [...REVIEWABLE_STATUSES, BookingStatus.CHECKED_IN];
 /** The booking's scheduled end (campus time) is after `:today :nowTime`. */
 const ENDS_AFTER_NOW =
   '(booking.date > :today OR (booking.date = :today AND booking.endTime > :nowTime))';

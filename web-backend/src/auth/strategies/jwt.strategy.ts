@@ -34,7 +34,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<User> {
     const user = await this.usersService.findById(payload.sub);
 
-    if (!user || !user.isActive) {
+    if (
+      !user ||
+      !user.isActive ||
+      payload.sessionVersion !== user.sessionVersion
+    ) {
       throw new UnauthorizedException('Session is no longer valid');
     }
 

@@ -496,6 +496,23 @@ describe('Admin resource management (e2e)', () => {
       expect((await storedResource()).status).toBe('active');
     });
 
+    it('blocks a closure while a past-due checked-in visit is unresolved', async () => {
+      const visitId = await insertBooking(
+        '2020-01-08',
+        '09:00',
+        '10:00',
+        'checked_in',
+      );
+      const response = await addClosure('2020-01-08').expect(409);
+      expect(response.body).toMatchObject({
+        code: 'RESOURCE_HAS_ACTIVE_BOOKINGS',
+        conflictCount: 1,
+        conflictingBookings: [
+          expect.objectContaining({ id: visitId, status: 'checked_in' }),
+        ],
+      });
+    });
+
     it('blocks a closure only on a date with active bookings', async () => {
       await insertBooking('2099-02-09', '09:00', '10:00', 'cancelled');
       await insertBooking('2099-02-09', '10:00', '11:00', 'rejected');
@@ -642,6 +659,24 @@ describe('Admin resource management (e2e)', () => {
         closesAt: '17:00',
       }).expect(409);
       expect(combined.body.conflictCount).toBe(3);
+    });
+
+    it('blocks a schedule edit around a checked-in visit even after its scheduled end', async () => {
+      const visitId = await insertBooking(
+        '2020-01-04',
+        '09:00',
+        '10:00',
+        'checked_in',
+      );
+      const response = await editSchedule({ opensAt: '10:00' }).expect(409);
+      expect(response.body).toMatchObject({
+        code: 'RESOURCE_HAS_ACTIVE_BOOKINGS',
+        conflictCount: 1,
+        conflictingBookings: [
+          expect.objectContaining({ id: visitId, status: 'checked_in' }),
+        ],
+      });
+      expect(await storedResource()).toMatchObject({ opens_at: '08:00:00' });
     });
 
     it('allows schedule changes that keep every active booking', async () => {
