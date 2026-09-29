@@ -243,10 +243,7 @@ describe("staff approval workflow", () => {
     render(<StaffApprovalQueue user={admin} queue={queueOf([booking])} operations={operationsOf([])} />);
 
     const nav = screen.getByRole("navigation", { name: "Staff navigation" });
-    expect(within(nav).getByRole("link", { name: "Approval queue" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(within(nav).queryByRole("link", { name: "Approval queue" })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Resources" })).toHaveAttribute("href", "/admin/resources");
     expect(within(nav).getByRole("link", { name: "Users" })).toHaveAttribute("href", "/admin/users");
     expect(within(nav).getByRole("link", { name: "Analytics" })).toHaveAttribute("href", "/admin/analytics");
@@ -259,7 +256,7 @@ describe("staff approval workflow", () => {
     const nav = screen.getByRole("navigation", { name: "Staff navigation" });
     expect(within(nav).queryByRole("link", { name: "Resources" })).not.toBeInTheDocument();
     expect(within(nav).getByText("Request detail")).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "Approval queue" })).not.toHaveAttribute("aria-current");
+    expect(within(nav).queryByRole("link", { name: "Approval queue" })).not.toBeInTheDocument();
   });
 
   it("approves a request and focuses the recorded outcome", async () => {
@@ -437,16 +434,16 @@ describe("staff approval workflow", () => {
       />,
     );
 
-    expect(screen.getByText(/This booking remains confirmed until a no-show is recorded/)).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Mark as no-show" }));
+    expect(screen.getByText(/This booking remains confirmed until the student is marked absent/)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Mark as absent" }));
 
     expect(mockedNoShow).toHaveBeenCalledWith(booking.id);
-    expect(await screen.findByText("No-show recorded")).toBeVisible();
+    expect(await screen.findByText("Absent recorded")).toBeVisible();
     expect(
       screen.getByText("No active bookings remain for this resource on this date."),
     ).toBeVisible();
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "No-show by staff" })).toHaveFocus(),
+      expect(screen.getByRole("heading", { name: "Absent by staff" })).toHaveFocus(),
     );
   });
 
@@ -468,9 +465,9 @@ describe("staff approval workflow", () => {
       />,
     );
     expect(screen.getByRole("heading", { name: "Released automatically" })).toBeVisible();
-    expect(screen.queryByText("No-show by staff")).not.toBeInTheDocument();
+    expect(screen.queryByText("Absent by staff")).not.toBeInTheDocument();
     expect(screen.getByText("Released · not checked in by 11:00")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Mark as no-show" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark as absent" })).not.toBeInTheDocument();
   });
 
   it("requires and submits a rejection reason", async () => {

@@ -236,7 +236,7 @@ describe('Admin booking analytics (e2e)', () => {
         [maintenanceResourceId],
       );
     }
-    expect(response.body.definition).toContain('no-show requests');
+    expect(response.body.definition).toContain('absent requests');
   });
 
   it('counts a released booking in status figures but not in demand', async () => {

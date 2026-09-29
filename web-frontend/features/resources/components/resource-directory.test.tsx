@@ -136,9 +136,17 @@ describe("ResourceDirectory", () => {
     const start = screen.getByLabelText("From");
     const end = screen.getByLabelText("Until");
 
-    expect(within(start).queryByRole("option", { name: "23:00" })).toBeNull();
-    expect(within(end).queryByRole("option", { name: "24:00" })).toBeNull();
-    expect(within(end).getByRole("option", { name: "23:00" })).toBeVisible();
+    // The campus booking window is 08:00–18:00, so times outside it are absent.
+    expect(within(start).queryByRole("option", { name: "07:00" })).toBeNull();
+    expect(within(start).queryByRole("option", { name: "18:00" })).toBeNull();
+    expect(within(end).queryByRole("option", { name: "08:00" })).toBeNull();
+    expect(within(end).queryByRole("option", { name: "19:00" })).toBeNull();
+    expect(
+      within(start).getByRole("option", { name: "08:00" }),
+    ).toBeInTheDocument();
+    expect(
+      within(end).getByRole("option", { name: "18:00" }),
+    ).toBeInTheDocument();
 
     fireEvent.change(date, { target: { value: "2026-09-15" } });
     expect(date).not.toBeRequired();
@@ -147,17 +155,17 @@ describe("ResourceDirectory", () => {
     expect(start).not.toHaveAttribute("name");
     expect(end).not.toHaveAttribute("name");
 
-    fireEvent.change(start, { target: { value: "22:00" } });
+    fireEvent.change(start, { target: { value: "16:00" } });
     expect(date).toBeRequired();
     expect(end).toBeRequired();
     expect(start).toHaveAttribute("name", "startTime");
-    fireEvent.change(end, { target: { value: "21:00" } });
+    fireEvent.change(end, { target: { value: "15:00" } });
     expect(end).toHaveAttribute("aria-invalid", "true");
     expect((end as HTMLSelectElement).validationMessage).toBe(
       "Until must be after From.",
     );
 
-    fireEvent.change(end, { target: { value: "23:00" } });
+    fireEvent.change(end, { target: { value: "17:00" } });
     expect(end).not.toHaveAttribute("aria-invalid");
     expect((end as HTMLSelectElement).validationMessage).toBe("");
 
@@ -233,22 +241,6 @@ describe("ResourceDirectory", () => {
       />,
     );
     expect(screen.getByText(/select a shorter interval/i)).toBeVisible();
-  });
-
-  it("labels interval results as booking-aware", () => {
-    render(
-      <ResourceDirectory
-        user={user}
-        page={page()}
-        buildings={[building]}
-        filters={{}}
-      />,
-    );
-
-    expect(
-      screen.getByText(/pending, confirmed, or checked-in bookings/i),
-    ).toBeVisible();
-    expect(screen.getByText(/checking operational hours/i)).toBeVisible();
   });
 
   it("preserves a complete interval in resource detail links", () => {

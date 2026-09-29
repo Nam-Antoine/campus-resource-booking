@@ -342,7 +342,7 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
                       : booking.status === "no_show"
                         ? booking.releasedAutomatically
                           ? "Released: check-in was not confirmed in time"
-                          : "Recorded as no-show"
+                          : "Recorded as absent"
                         : booking.status === "rejected"
                           ? "This request was not approved"
                           : "This booking was cancelled"}
@@ -353,11 +353,11 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
                 : isReviewWindowClosed(booking)
                   ? "Staff can no longer approve this request. It is still pending release, so its slot may remain held until the system records it as expired. Refresh this page to check its status before trying another time."
                 : isCheckInWindowClosed(booking)
-                  ? "Staff can no longer check you in for this booking. It remains confirmed until the system records a no-show and releases its slot. Refresh for the latest status or contact campus staff."
+                  ? "Staff can no longer check you in for this booking. It remains confirmed until the system marks you absent and releases its slot. Refresh for the latest status or contact campus staff."
                 : booking.hasEnded &&
               (booking.status === "confirmed" || booking.status === "checked_in")
                 ? booking.status === "confirmed"
-                  ? "The scheduled time has ended without a confirmed check-in, so the booking will be recorded as a no-show."
+                  ? "The scheduled time has ended without a confirmed check-in, so the booking will be recorded as absent."
                   : "The scheduled time has ended, but checkout has not yet been recorded. Contact campus staff to complete the visit."
                 : booking.status === "pending"
                 ? `The time is held for you while staff review the request. If nobody approves it by the scheduled end at ${campusClockTime(booking.checkInDeadline)}, the request expires.`
@@ -369,7 +369,7 @@ export function StudentBookingDetail({ user, booking: initialBooking }: StudentB
                       ? `Checked out ${booking.checkedOutAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(booking.checkedOutAt)) : ""}.`
                       : booking.status === "no_show"
                         ? booking.releasedAutomatically
-                          ? `Staff had not checked you in by the scheduled end at ${campusClockTime(booking.checkInDeadline)}, so the booking was recorded as a no-show.`
+                          ? `Staff had not checked you in by the scheduled end at ${campusClockTime(booking.checkInDeadline)}, so the booking was recorded as absent.`
                           : "Staff recorded that this booking was not used."
                         : booking.status === "rejected"
                           ? booking.rejectionReason ?? "Staff could not approve this request."

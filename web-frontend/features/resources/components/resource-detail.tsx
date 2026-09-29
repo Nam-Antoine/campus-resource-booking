@@ -23,6 +23,7 @@ import type {
   ResourceStatus,
   ResourceType,
 } from "../types";
+import { SlotRangePicker } from "./slot-range-picker";
 import styles from "./resource-detail.module.css";
 
 const typeLabels: Record<ResourceType, string> = {
@@ -192,15 +193,7 @@ export function ResourceDetail({
 
           {liveRegion}
 
-          {!availability ? (
-            <div className={styles.availabilityPrompt}>
-              <strong>Select a date to see hourly slots.</strong>
-              <span>
-                Displayed slots reflect operating schedules, full-day closures,
-                and current pending, confirmed, or checked-in bookings.
-              </span>
-            </div>
-          ) : availability.blockedReason ? (
+          {!availability ? null : availability.blockedReason ? (
             <div className={styles.blockedState} role="status">
               <strong>No operational availability</strong>
               <span>{blockedMessages[availability.blockedReason]}</span>
@@ -230,36 +223,13 @@ export function ResourceDetail({
                   checked again when a booking request is sent.
                 </small>
               </div>
-              <div className={styles.slotGrid} aria-label="Available time slots">
-                {availability.slots.map((slot) => {
-                  const selected =
-                    isSlotAvailable && selectedSlot?.startTime === slot.startTime;
-                  const href = `/resources/${resource.id}?date=${encodeURIComponent(
-                    availability.date,
-                  )}&startTime=${encodeURIComponent(
-                    slot.startTime,
-                  )}&endTime=${encodeURIComponent(slot.endTime)}`;
-                  return (
-                    <Link
-                      key={slot.startTime}
-                      href={href}
-                      aria-label={`${slot.startTime} to ${slot.endTime}`}
-                      aria-current={selected ? "true" : undefined}
-                    >
-                      <span>{slot.startTime}</span>
-                      <small>to {slot.endTime}</small>
-                    </Link>
-                  );
-                })}
-              </div>
-              {selectedSlot && isSlotAvailable && (
-                <p className={styles.selectionNotice} role="status">
-                  <strong>
-                    {selectedSlot.startTime}–{selectedSlot.endTime} selected.
-                  </strong>{" "}
-                  This does not reserve or hold the resource.
-                </p>
-              )}
+              <SlotRangePicker
+                resourceId={resource.id}
+                date={availability.date}
+                slots={availability.slots}
+                initialStart={isSlotAvailable ? selectedSlot?.startTime : undefined}
+                initialEnd={isSlotAvailable ? selectedSlot?.endTime : undefined}
+              />
               {requestForm}
             </div>
           )}

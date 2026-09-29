@@ -39,7 +39,7 @@ const statusLabels: Record<StaffBooking["status"], string> = {
   confirmed: "Confirmed",
   checked_in: "Checked in",
   completed: "Completed",
-  no_show: "No-show",
+  no_show: "Absent",
   rejected: "Rejected",
   cancelled: "Cancelled",
   expired: "Expired request",
@@ -87,7 +87,6 @@ function StaffHeader({ user, detail = false }: { user: User; detail?: boolean })
     <header className={styles.header}>
       <BrandMark href="/staff" />
       <nav className={styles.headerNav} aria-label="Staff navigation">
-        <Link prefetch={false} href="/staff" aria-current={detail ? undefined : "page"}>Approval queue</Link>
         {detail && <span aria-current="page">Request detail</span>}
         {isAdmin && (
           <>
@@ -411,7 +410,7 @@ export function StaffBookingDetail({
               ) : booking.status === "confirmed" ? (
                 <>
                   <p>{booking.canMarkNoShow
-                    ? `The reservation ended at ${campusClockTime(booking.checkInDeadline)} without check-in. This booking remains confirmed until a no-show is recorded; the slot may still be held. Record the no-show to close it.`
+                    ? `The reservation ended at ${campusClockTime(booking.checkInDeadline)} without check-in. This booking remains confirmed until the student is marked absent; the slot may still be held. Mark the student absent to close it.`
                     : `Match the student's confirmation against the full booking ID, name, university email, resource, location and scheduled time above. Check the current status before confirming arrival. Staff can check in students from the scheduled start until the end at ${campusClockTime(booking.checkInDeadline)}.`}</p>
                   {booking.canConfirmCheckIn && (
                     <div className={styles.checkInForm}>
@@ -422,7 +421,7 @@ export function StaffBookingDetail({
                   )}
                   {booking.canMarkNoShow && (
                     <button className={styles.noShowButton} type="button" disabled={isSaving} onClick={() => void operate("no-show")}>
-                      {isSaving ? "Recording…" : "Mark as no-show"}
+                      {isSaving ? "Recording…" : "Mark as absent"}
                     </button>
                   )}
                 </>
@@ -435,7 +434,7 @@ export function StaffBookingDetail({
                 </>
               ) : (
                 <div className={styles.outcome} data-status={booking.status}>
-                  <strong>{booking.status === "completed" ? "Visit completed" : booking.status === "no_show" ? booking.releasedAutomatically ? `Released · not checked in by ${campusClockTime(booking.checkInDeadline)}` : "No-show recorded" : booking.status === "rejected" ? "Request rejected" : "Booking closed"}</strong>
+                  <strong>{booking.status === "completed" ? "Visit completed" : booking.status === "no_show" ? booking.releasedAutomatically ? `Released · not checked in by ${campusClockTime(booking.checkInDeadline)}` : "Absent recorded" : booking.status === "rejected" ? "Request rejected" : "Booking closed"}</strong>
                   <span>{booking.checkedOutAt ? requestedAt(booking.checkedOutAt) : booking.noShowAt ? requestedAt(booking.noShowAt) : booking.reviewedAt ? requestedAt(booking.reviewedAt) : "Update recorded"}</span>
                   {booking.rejectionReason && <p>{booking.rejectionReason}</p>}
                 </div>

@@ -83,8 +83,8 @@ const roleCards = [
     role: "Staff",
     title: "Decide requests and run visits.",
     description:
-      "Review pending requests against the resource schedule, approve or reject with a reason, match student booking confirmations, confirm arrivals and check-outs, and record no-shows.",
-    tags: ["Approve or reject", "Confirm arrivals", "No-shows"],
+      "Review pending requests against the resource schedule, approve or reject with a reason, match student booking confirmations, confirm arrivals and check-outs, and record absences.",
+    tags: ["Approve or reject", "Confirm arrivals", "Absences"],
   },
   {
     role: "Administrators",

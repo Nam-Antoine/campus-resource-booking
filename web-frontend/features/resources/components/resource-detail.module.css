@@ -500,7 +500,8 @@
 
 .dateForm input:focus,
 .dateForm button:focus-visible,
-.slotGrid a:focus-visible {
+.slotGrid a:focus-visible,
+.slotGrid button:focus-visible {
   outline: 3px solid rgba(42, 60, 149, 0.18);
   outline-offset: 2px;
 }
@@ -558,7 +559,8 @@
   margin-top: 12px;
 }
 
-.slotGrid a {
+.slotGrid a,
+.slotGrid button {
   min-height: 58px;
   display: grid;
   align-content: center;
@@ -567,10 +569,15 @@
   border: 1px solid rgba(42, 60, 149, 0.18);
   border-radius: 11px;
   background: var(--white);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
 }
 
 .slotGrid a:hover,
-.slotGrid a[aria-current="true"] {
+.slotGrid a[aria-current="true"],
+.slotGrid button:hover,
+.slotGrid button[aria-pressed="true"] {
   color: var(--white);
   border-color: var(--usth-blue);
   background: var(--usth-blue);
@@ -586,14 +593,65 @@
   opacity: 0.76;
 }
 
-.selectionNotice {
-  margin: 14px 0 0;
+.pickerHint {
+  margin: 12px 0 0;
   color: var(--muted);
   font-size: 0.84rem;
 }
 
-.selectionNotice strong {
+.pickerSelection {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.pickerSelection p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.pickerSelection strong {
   color: var(--ink);
+}
+
+.pickerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pickerConfirm {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 18px;
+  color: var(--white);
+  border-radius: 10px;
+  background: var(--usth-blue);
+  font-weight: 760;
+}
+
+.pickerConfirm:hover {
+  background: var(--usth-blue-dark);
+}
+
+.pickerClear {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--usth-blue);
+  border: 1px solid rgba(42, 60, 149, 0.24);
+  border-radius: 10px;
+  background: var(--white);
+  font: inherit;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.pickerClear:hover {
+  background: rgba(42, 60, 149, 0.06);
 }
 
 .availabilityPolicy {

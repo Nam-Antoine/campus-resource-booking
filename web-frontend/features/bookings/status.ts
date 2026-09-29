@@ -9,7 +9,7 @@ export const studentStatusLabels: Record<StudentBookingDisplayStatus, string> = 
   confirmed: "Confirmed",
   checked_in: "Checked in",
   completed: "Completed",
-  no_show: "No-show",
+  no_show: "Absent",
   rejected: "Rejected",
   cancelled: "Cancelled",
 };

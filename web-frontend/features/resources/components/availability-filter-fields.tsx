@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ResourceDiscoveryFilters } from "../types";
-import styles from "./resource-directory.module.css";
 
 interface AvailabilityFilterFieldsProps {
   filters: Pick<
@@ -11,11 +10,12 @@ interface AvailabilityFilterFieldsProps {
   >;
 }
 
-const startTimes = Array.from({ length: 23 }, (_, hour) =>
-  `${String(hour).padStart(2, "0")}:00`,
+// Students may only book inside the campus window of 08:00–18:00 (ICT).
+const startTimes = Array.from({ length: 10 }, (_, index) =>
+  `${String(index + 8).padStart(2, "0")}:00`,
 );
-const endTimes = Array.from({ length: 23 }, (_, index) =>
-  `${String(index + 1).padStart(2, "0")}:00`,
+const endTimes = Array.from({ length: 10 }, (_, index) =>
+  `${String(index + 9).padStart(2, "0")}:00`,
 );
 
 export function AvailabilityFilterFields({
@@ -24,7 +24,19 @@ export function AvailabilityFilterFields({
   const [date, setDate] = useState(filters.date ?? "");
   const [startTime, setStartTime] = useState(filters.startTime ?? "");
   const [endTime, setEndTime] = useState(filters.endTime ?? "");
-  const invalidOrder = Boolean(startTime && endTime && startTime >= endTime);
+  const endRef = useRef<HTMLSelectElement>(null);
+
+  // "Until" must be after "From"; surface it inline rather than reordering.
+  const invalidInterval = Boolean(
+    startTime && endTime && endTime <= startTime,
+  );
+
+  useEffect(() => {
+    if (!endRef.current) return;
+    endRef.current.setCustomValidity(
+      invalidInterval ? "Until must be after From." : "",
+    );
+  }, [invalidInterval, endTime, startTime]);
 
   return (
     <>
@@ -35,7 +47,6 @@ export function AvailabilityFilterFields({
           type="date"
           value={date}
           required={Boolean(startTime || endTime)}
-          aria-describedby="availability-filter-hint"
           onChange={(event) => setDate(event.target.value)}
         />
       </label>
@@ -46,7 +57,6 @@ export function AvailabilityFilterFields({
           name={startTime ? "startTime" : undefined}
           value={startTime}
           required={Boolean(endTime)}
-          aria-describedby="availability-filter-hint"
           onChange={(event) => setStartTime(event.target.value)}
         >
           <option value="">Any start</option>
@@ -61,17 +71,12 @@ export function AvailabilityFilterFields({
       <label>
         <span>Until</span>
         <select
+          ref={endRef}
           name={endTime ? "endTime" : undefined}
           value={endTime}
           required={Boolean(startTime)}
-          aria-invalid={invalidOrder || undefined}
-          aria-describedby="availability-filter-hint"
+          aria-invalid={invalidInterval ? "true" : undefined}
           onChange={(event) => setEndTime(event.target.value)}
-          ref={(element) => {
-            element?.setCustomValidity(
-              invalidOrder ? "Until must be after From." : "",
-            );
-          }}
         >
           <option value="">Any end</option>
           {endTimes.map((time) => (
@@ -81,14 +86,6 @@ export function AvailabilityFilterFields({
           ))}
         </select>
       </label>
-
-      <p className={styles.availabilityHint} id="availability-filter-hint">
-        Choose a date with Any start and Any end to find resources free for
-        their entire operating day (only if it has not started). To search a
-        specific interval, choose both From and Until; Until must be after
-        From. Times use ICT (UTC+7). Results exclude closures and times
-        occupied by pending, confirmed, or checked-in bookings.
-      </p>
     </>
   );
 }

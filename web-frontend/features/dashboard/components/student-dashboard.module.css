@@ -135,7 +135,7 @@
 }
 
 .profileCopy,
-.topbarProfile > span:last-child {
+.topbarProfile > span:nth-child(2) {
   min-width: 0;
   display: grid;
 }
@@ -872,6 +872,11 @@
   background:
     radial-gradient(circle at 100% 0, rgba(94, 114, 210, 0.48), transparent 15rem),
     var(--usth-blue-dark);
+}
+
+/* Hidden per request: the "Before you reserve" rules panel. */
+.rulesPanel {
+  display: none;
 }
 
 .rulesPanel::after {

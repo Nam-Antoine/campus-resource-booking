@@ -15,6 +15,7 @@ import {
   campusTimeOf,
   isFutureCampusTime,
 } from '../common/time/campus-clock';
+import { clampToBookingWindow } from '../common/time/booking-window';
 import { ResourceClosure } from '../resources/entities/resource-closure.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceStatus } from '../resources/enums/resource-status.enum';
@@ -648,8 +649,12 @@ export class BookingsService {
   ): void {
     const [year, month, day] = dto.date.split('-').map(Number);
     const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-    const opensAt = resource.opensAt.slice(0, 5);
-    const closesAt = resource.closesAt.slice(0, 5);
+    // Intersect the resource hours with the campus booking window (08:00–18:00)
+    // so a resource with wider hours can still only be booked inside it.
+    const { open: opensAt, close: closesAt } = clampToBookingWindow(
+      resource.opensAt.slice(0, 5),
+      resource.closesAt.slice(0, 5),
+    );
 
     if (
       resource.status !== ResourceStatus.ACTIVE ||

@@ -17,7 +17,7 @@ const summary: AnalyticsSummary = {
   statuses,
   popularResources: [{ id: "20000000-0000-4000-8000-000000000001", code: "ROOM-A101", name: "Study Room A101", building: "Main Academic Building", bookingCount: 4, bookedHours: 8 }],
   peakHours: [{ hour: 9, label: "09:00", bookingCount: 3 }, { hour: 10, label: "10:00", bookingCount: 2 }],
-  definition: "Bookings are grouped by scheduled campus date. Scheduled occupancy excludes cancelled, rejected, and no-show requests.",
+  definition: "Bookings are grouped by scheduled campus date. Scheduled occupancy excludes cancelled, rejected, and absent requests.",
 };
 
 describe("AdminAnalytics", () => {

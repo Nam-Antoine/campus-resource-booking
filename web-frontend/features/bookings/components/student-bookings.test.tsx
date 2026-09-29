@@ -111,7 +111,7 @@ describe("student booking management", () => {
     render(<StudentBookingDetail user={user} booking={{ ...booking, canCancel: false, checkInDeadline: "2020-01-01T00:00:00.000Z" }} />);
     expect(screen.queryByRole("region", { name: "Booking confirmation" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Check-in window ended" })).toBeVisible();
-    expect(screen.getByText(/remains confirmed until the system records a no-show/)).toBeVisible();
+    expect(screen.getByText(/remains confirmed until the system marks you absent/)).toBeVisible();
   });
 
   it("tells the student when staff check-in closes and that the booking is then released", () => {
@@ -207,7 +207,7 @@ describe("student booking management", () => {
 
     expect(screen.getByText("Booking time ended")).toBeVisible();
     expect(
-      screen.getByText(/ended without a confirmed check-in, so the booking will be recorded as a no-show/),
+      screen.getByText(/ended without a confirmed check-in, so the booking will be recorded as absent/),
     ).toBeVisible();
     expect(screen.queryByText(/Check-in opens/)).not.toBeInTheDocument();
     expect(

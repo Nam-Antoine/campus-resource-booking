@@ -77,9 +77,6 @@ describe("ResourceDetail", () => {
       "/bookings",
     );
     expect(
-      screen.getByText(/current pending, confirmed, or checked-in bookings/),
-    ).toBeVisible();
-    expect(
       screen.getByText(/policy and availability are checked again/i),
     ).toBeVisible();
   });
@@ -154,14 +151,17 @@ describe("ResourceDetail", () => {
       screen.getByText(/Pending, confirmed, and checked-in bookings are excluded/),
     ).toBeVisible();
     expect(
-      screen.getByRole("link", { name: /08:00/ }),
+      screen.getByRole("button", { name: "08:00 to 09:00" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "09:00 to 10:00" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("link", { name: "Use 09:00–10:00" }),
     ).toHaveAttribute(
       "href",
-      `/resources/${resource.id}?date=2026-09-15&startTime=08%3A00&endTime=09%3A00`,
+      `/resources/${resource.id}?date=2026-09-15&startTime=09%3A00&endTime=10%3A00`,
     );
-    expect(
-      screen.getByRole("link", { name: "09:00 to 10:00" }),
-    ).toHaveAttribute("aria-current", "true");
     expect(screen.getByText(/does not reserve or hold/)).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "Request this resource" }),
@@ -169,6 +169,50 @@ describe("ResourceDetail", () => {
     expect(
       screen.getByRole("button", { name: "Send booking request" }),
     ).toBeVisible();
+  });
+
+  it("lets a student select a multi-hour range across the slot grid", async () => {
+    const availability: ResourceAvailability = {
+      resourceId: resource.id,
+      date: "2099-01-05",
+      timeZone: "Asia/Ho_Chi_Minh",
+      status: "active",
+      operatingDays: [1, 2, 3, 4, 5, 6],
+      opensAt: "08:00",
+      closesAt: "18:00",
+      blockedReason: null,
+      closureReason: null,
+      requiresApproval: true,
+      slots: [
+        { startTime: "09:00", endTime: "10:00" },
+        { startTime: "10:00", endTime: "11:00" },
+        { startTime: "11:00", endTime: "12:00" },
+      ],
+    };
+
+    render(
+      <ResourceDetail
+        user={user}
+        resource={resource}
+        availability={availability}
+        checkedDate={availability.date}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "09:00 to 10:00" }));
+    await userEvent.click(screen.getByRole("button", { name: "11:00 to 12:00" }));
+
+    expect(screen.getByText(/09:00–12:00 selected/)).toBeVisible();
+    expect(screen.getByText(/3 hours/)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "10:00 to 11:00" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("link", { name: "Use 09:00–12:00" }),
+    ).toHaveAttribute(
+      "href",
+      `/resources/${resource.id}?date=2099-01-05&startTime=09%3A00&endTime=12%3A00`,
+    );
   });
 
   it("submits a validated multi-hour interval", () => {
@@ -426,10 +470,10 @@ describe("ResourceDetail", () => {
       "href",
       `/resources/${resource.id}?date=2099-01-05`,
     );
-    expect(screen.queryByText(/selected\./)).not.toBeInTheDocument();
+    expect(screen.queryByText(/selected ·/)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "09:00 to 10:00" }),
-    ).not.toHaveAttribute("aria-current");
+      screen.getByRole("button", { name: "09:00 to 10:00" }),
+    ).toHaveAttribute("aria-pressed", "false");
     expect(
       screen.queryByRole("button", { name: "Send booking request" }),
     ).not.toBeInTheDocument();

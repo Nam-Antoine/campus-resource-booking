@@ -30,7 +30,7 @@ const UTILIZATION_STATUSES = [
   BookingStatus.COMPLETED,
 ];
 const DEFINITION =
-  'Bookings are grouped by scheduled campus date. Total and status figures include every request. Popular resources and peak hours include pending or accepted requests, including no-shows recorded by staff; cancelled, rejected, and expired requests are excluded, and so are bookings released automatically after a missed check-in, because they were never used. Scheduled utilization includes pending through completed bookings for resources in the current active catalog; cancelled, rejected, expired, and no-show requests are excluded. Capacity uses those resources’ current configured operating days and hours from their creation date, less full-day closures.';
+  'Bookings are grouped by scheduled campus date. Total and status figures include every request. Popular resources and peak hours include pending or accepted requests, including absences recorded by staff; cancelled, rejected, and expired requests are excluded, and so are bookings released automatically after a missed check-in, because they were never used. Scheduled utilization includes pending through completed bookings for resources in the current active catalog; cancelled, rejected, expired, and absent requests are excluded. Capacity uses those resources’ current configured operating days and hours from their creation date, less full-day closures.';
 
 type CountRow = { status: BookingStatus; count: string };
 type PopularRow = {

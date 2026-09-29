@@ -48,6 +48,17 @@ function activeFilterCount(filters: ResourceDiscoveryFilters): number {
   ].filter((value) => value !== undefined).length;
 }
 
+/** Applied filters that live inside the collapsible panel (search stays visible). */
+function panelFilterCount(filters: ResourceDiscoveryFilters): number {
+  return [
+    filters.buildingId,
+    filters.type,
+    filters.minCapacity,
+    filters.amenity,
+    filters.date,
+  ].filter((value) => value !== undefined).length;
+}
+
 interface ResourceDirectoryProps {
   user: User;
   page: ResourcePage;
@@ -62,6 +73,7 @@ export function ResourceDirectory({
   filters,
 }: ResourceDirectoryProps) {
   const appliedFilters = activeFilterCount(filters);
+  const panelFilters = panelFilterCount(filters);
 
   return (
     <main className={styles.page}>
@@ -127,7 +139,7 @@ export function ResourceDirectory({
             )}
           </div>
 
-          <div className={styles.filterGrid}>
+          <div className={styles.searchRow}>
             <label className={styles.searchField}>
               <span>Resource or location</span>
               <span className={styles.inputWithIcon}>
@@ -141,7 +153,16 @@ export function ResourceDirectory({
                 />
               </span>
             </label>
+            <details className={styles.filterDisclosure}>
+              <summary className={styles.filterToggle}>
+                <SlidersIcon />
+                Filters
+                {panelFilters > 0 && (
+                  <span className={styles.filterCount}>{panelFilters}</span>
+                )}
+              </summary>
 
+              <div className={styles.filterGrid}>
             <label>
               <span>Building</span>
               <select name="buildingId" defaultValue={filters.buildingId ?? ""}>
@@ -200,8 +221,14 @@ export function ResourceDirectory({
               </select>
             </label>
 
-            <button className={styles.searchButton} type="submit">
-              <SearchIcon /> Search resources
+                <button className={styles.applyFilters} type="submit">
+                  <SearchIcon />
+                  Apply filters
+                </button>
+              </div>
+            </details>
+            <button className={styles.srOnly} type="submit">
+              Search resources
             </button>
           </div>
         </form>

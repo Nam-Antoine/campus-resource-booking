@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Booking } from '../../bookings/entities/booking.entity';
+import { clampToBookingWindow } from '../../common/time/booking-window';
 import { isFutureCampusTime } from '../../common/time/campus-clock';
 import { Resource } from '../entities/resource.entity';
 import { ResourceClosure } from '../entities/resource-closure.entity';
@@ -63,6 +64,10 @@ export class ResourceAvailabilityResponseDto {
     now: Date = new Date(),
   ): ResourceAvailabilityResponseDto {
     const dayOfWeek = dayOfWeekFor(date);
+    const { open: windowOpensAt, close: windowClosesAt } = clampToBookingWindow(
+      normalizeTime(resource.opensAt),
+      normalizeTime(resource.closesAt),
+    );
     let blockedReason: AvailabilityBlockedReason | null = null;
 
     if (resource.status === ResourceStatus.MAINTENANCE) {
@@ -81,8 +86,8 @@ export class ResourceAvailabilityResponseDto {
       timeZone: CAMPUS_TIME_ZONE,
       status: resource.status,
       operatingDays: resource.operatingDays,
-      opensAt: normalizeTime(resource.opensAt),
-      closesAt: normalizeTime(resource.closesAt),
+      opensAt: windowOpensAt,
+      closesAt: windowClosesAt,
       blockedReason,
       closureReason:
         blockedReason === AvailabilityBlockedReason.CLOSURE
@@ -91,7 +96,7 @@ export class ResourceAvailabilityResponseDto {
       requiresApproval: resource.requiresApproval,
       slots:
         blockedReason === null
-          ? hourlySlots(resource.opensAt, resource.closesAt).filter(
+          ? hourlySlots(windowOpensAt, windowClosesAt).filter(
               (slot) =>
                 isFutureCampusTime(date, slot.startTime, now) &&
                 !bookings.some(
