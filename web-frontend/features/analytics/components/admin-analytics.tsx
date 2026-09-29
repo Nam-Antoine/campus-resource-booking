@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { BrandMark } from "@/components/brand-mark";
-import { LogoutButton } from "@/features/auth/components/logout-button";
+import { AdminHeader } from "@/components/admin-header";
 import type { User } from "@/features/auth/types";
 import type { AnalyticsSummary } from "../types";
 import styles from "./admin-analytics.module.css";
@@ -29,19 +28,7 @@ export function AdminAnalytics({ user, summary }: { user: User; summary: Analyti
 
   return (
     <main className={styles.page}>
-      <header className={styles.header}>
-        <BrandMark />
-        <nav aria-label="Administrator sections">
-          <Link href="/admin/resources">Resources</Link>
-          <Link href="/admin/users">Users</Link>
-          <Link href="/admin/analytics" aria-current="page">Analytics</Link>
-          <Link href="/staff">Approvals</Link>
-        </nav>
-        <div className={styles.identity}>
-          <span><strong>{user.fullName}</strong><small>Administrator</small></span>
-          <LogoutButton className={styles.logout} errorClassName={styles.logoutError} />
-        </div>
-      </header>
+      <AdminHeader fullName={user.fullName} current="analytics" />
 
       <div className={styles.shell}>
         <section className={styles.intro} aria-labelledby="analytics-title">
@@ -98,8 +85,6 @@ export function AdminAnalytics({ user, summary }: { user: User; summary: Analyti
             </section>
           </>
         )}
-
-        <aside className={styles.definition} aria-labelledby="definition-title"><div><p className={styles.context}>How to read this report</p><h2 id="definition-title">Metric definitions</h2></div><p>{summary.definition}</p></aside>
       </div>
     </main>
   );

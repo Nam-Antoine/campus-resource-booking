@@ -21,7 +21,7 @@ const summary: AnalyticsSummary = {
 };
 
 describe("AdminAnalytics", () => {
-  it("renders live metrics, charts, ranking, definitions, and date controls", () => {
+  it("renders live metrics, charts, ranking, and date controls", () => {
     render(<AdminAnalytics user={user} summary={summary} />);
     expect(screen.getByRole("heading", { name: "See where campus time is being reserved" })).toBeInTheDocument();
     const metrics = screen.getByLabelText("Booking analytics summary");
@@ -33,7 +33,9 @@ describe("AdminAnalytics", () => {
     expect(screen.getByRole("img", { name: /09:00: 3 bookings/ })).toBeInTheDocument();
     expect(screen.getByText("requested hours")).toBeInTheDocument();
     expect(screen.getByText("Study Room A101")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Metric definitions" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Metric definitions" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Analytics" })).toHaveAttribute("aria-current", "page");
   });
 

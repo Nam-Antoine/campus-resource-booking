@@ -119,6 +119,8 @@ describe('BookingsService', () => {
       { ...request, startTime: '12:00', endTime: '11:00' },
       'INVALID_BOOKING_RANGE',
     ],
+    [{ ...request, startTime: '09:00', endTime: '13:00' }, 'BOOKING_TOO_LONG'],
+    [{ ...request, startTime: '08:00', endTime: '18:00' }, 'BOOKING_TOO_LONG'],
     [{ ...request, date: '2026-09-14' }, 'BOOKING_IN_PAST'],
     [
       { ...request, date: '2026-09-15', startTime: '06:00', endTime: '07:00' },
@@ -133,6 +135,18 @@ describe('BookingsService', () => {
       code,
     });
     expect(harness.dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('accepts a booking of exactly the maximum 3 hours', async () => {
+    const harness = createHarness();
+
+    await expect(
+      harness.service.create(requesterId, {
+        ...request,
+        startTime: '09:00',
+        endTime: '12:00',
+      }),
+    ).resolves.toMatchObject({ startTime: '09:00', endTime: '12:00' });
   });
 
   it.each([

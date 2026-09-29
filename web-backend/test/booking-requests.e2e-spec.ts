@@ -368,11 +368,11 @@ describe('Booking requests (e2e)', () => {
       .send(initial)
       .expect(201);
 
+    // Exact, partial (both sides), and contained overlaps of the 10:00–12:00 hold.
     for (const [startTime, endTime] of [
       ['10:00', '12:00'],
       ['09:00', '11:00'],
       ['10:00', '11:00'],
-      ['09:00', '13:00'],
       ['11:00', '13:00'],
     ]) {
       const response = await api()
@@ -382,6 +382,21 @@ describe('Booking requests (e2e)', () => {
         .expect(409);
       expect(response.body.code).toBe('BOOKING_OVERLAP');
     }
+
+    // Enveloping: a booking that fully contains a shorter hold. Tested against a
+    // one-hour anchor in a separate window so the envelope stays within the
+    // three-hour booking limit.
+    await api()
+      .post('/api/bookings')
+      .set('Cookie', studentOneCookie)
+      .send({ ...initial, startTime: '15:00', endTime: '16:00' })
+      .expect(201);
+    const enveloping = await api()
+      .post('/api/bookings')
+      .set('Cookie', studentTwoCookie)
+      .send({ ...initial, startTime: '14:00', endTime: '17:00' })
+      .expect(409);
+    expect(enveloping.body.code).toBe('BOOKING_OVERLAP');
   });
 
   it('allows adjacent ranges and the same interval on another resource', async () => {

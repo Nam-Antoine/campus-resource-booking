@@ -10,10 +10,9 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { BrandMark } from "@/components/brand-mark";
+import { AdminHeader } from "@/components/admin-header";
 import { PaginationNav } from "@/components/pagination-nav";
 import { PeopleIcon, SearchIcon, ShieldCheckIcon } from "@/components/icons";
-import { LogoutButton } from "@/features/auth/components/logout-button";
 import type { User, UserRole } from "@/features/auth/types";
 import {
   createStaffAccount,
@@ -232,19 +231,7 @@ export function AdminUserManager({
 
   return (
     <main className={styles.page}>
-      <header className={styles.header}>
-        <BrandMark />
-        <nav aria-label="Administrator sections">
-          <Link href="/admin/resources">Resources</Link>
-          <Link href="/admin/users" aria-current="page">Users</Link>
-          <Link href="/admin/analytics">Analytics</Link>
-          <Link href="/staff">Approvals</Link>
-        </nav>
-        <div className={styles.identity}>
-          <span><strong>{currentUser.fullName}</strong><small>Administrator</small></span>
-          <LogoutButton className={styles.logout} errorClassName={styles.logoutError} />
-        </div>
-      </header>
+      <AdminHeader fullName={currentUser.fullName} current="users" />
 
       <div className={styles.shell}>
         <section className={styles.intro} aria-labelledby="user-admin-title">

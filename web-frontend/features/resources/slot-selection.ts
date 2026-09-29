@@ -1,5 +1,8 @@
 import type { AvailabilitySlot, ResourceAvailability } from "./types";
 
+/** Longest reservation a student may make, in whole hours (matches the API). */
+export const MAX_BOOKING_HOURS = 3;
+
 export interface SlotSelection {
   /** The interval named by the URL, when it is complete and well formed. */
   selectedSlot: AvailabilitySlot | undefined;
@@ -20,7 +23,8 @@ const NO_SELECTION: SlotSelection = {
  * - A complete range inside operating hours is always returned so the page
  *   can explain when it is no longer available (for example, after another
  *   student booked it or a realtime refresh removed it).
- * - Anything incomplete, reversed, or outside operating hours selects nothing.
+ * - Anything incomplete, reversed, longer than the maximum, or outside
+ *   operating hours selects nothing.
  */
 export function resolveSlotSelection(
   availability: ResourceAvailability,
@@ -39,7 +43,9 @@ export function resolveSlotSelection(
   if (
     startTime >= endTime ||
     startTime < availability.opensAt ||
-    endTime > availability.closesAt
+    endTime > availability.closesAt ||
+    Number(endTime.slice(0, 2)) - Number(startTime.slice(0, 2)) >
+      MAX_BOOKING_HOURS
   ) {
     return NO_SELECTION;
   }

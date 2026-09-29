@@ -15,7 +15,10 @@ import {
   campusTimeOf,
   isFutureCampusTime,
 } from '../common/time/campus-clock';
-import { clampToBookingWindow } from '../common/time/booking-window';
+import {
+  BOOKING_MAX_DURATION_HOURS,
+  clampToBookingWindow,
+} from '../common/time/booking-window';
 import { ResourceClosure } from '../resources/entities/resource-closure.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceStatus } from '../resources/enums/resource-status.enum';
@@ -632,6 +635,16 @@ export class BookingsService {
       throw new BookingDomainError(
         'INVALID_BOOKING_RANGE',
         'Booking start time must be before end time',
+      );
+    }
+
+    // Whole-hour "HH:00" strings, so the span is simply the hour difference.
+    const durationHours =
+      Number(dto.endTime.slice(0, 2)) - Number(dto.startTime.slice(0, 2));
+    if (durationHours > BOOKING_MAX_DURATION_HOURS) {
+      throw new BookingDomainError(
+        'BOOKING_TOO_LONG',
+        `A booking may not exceed ${BOOKING_MAX_DURATION_HOURS} hours`,
       );
     }
 

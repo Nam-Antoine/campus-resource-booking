@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { AvailabilitySlot } from "../types";
+import { MAX_BOOKING_HOURS } from "../slot-selection";
 import styles from "./resource-detail.module.css";
 
 interface SlotRangePickerProps {
@@ -46,7 +47,8 @@ export function SlotRangePicker({
     initialStart &&
       isAnchorable(initialStart) &&
       initialEnd &&
-      hoursBetween(initialStart, initialEnd) > 1
+      hoursBetween(initialStart, initialEnd) > 1 &&
+      hoursBetween(initialStart, initialEnd) <= MAX_BOOKING_HOURS
       ? initialEnd
       : null,
   );
@@ -62,8 +64,8 @@ export function SlotRangePicker({
   }
 
   function handleSelect(slot: AvailabilitySlot) {
-    if (anchor === null || rangeEnd !== null) {
-      // Fresh selection: this slot becomes the new single-hour anchor.
+    if (anchor === null) {
+      // First click: this slot becomes the single-hour anchor.
       setAnchor(slot.startTime);
       setRangeEnd(null);
       return;
@@ -75,11 +77,17 @@ export function SlotRangePicker({
       return;
     }
     if (slot.startTime === anchor) {
+      // Clicking the anchor again collapses back to a single hour.
       setRangeEnd(null);
       return;
     }
-    // Clicking a later slot extends the range, if the span is unbroken.
-    if (isContiguous(anchor, slot.endTime)) {
+    // Clicking a later slot extends the range — including growing an existing
+    // range block by block — while the span is unbroken and within the maximum.
+    // Anything longer or broken starts a fresh selection at the clicked slot.
+    if (
+      isContiguous(anchor, slot.endTime) &&
+      hoursBetween(anchor, slot.endTime) <= MAX_BOOKING_HOURS
+    ) {
       setRangeEnd(slot.endTime);
     } else {
       setAnchor(slot.startTime);
@@ -107,8 +115,9 @@ export function SlotRangePicker({
   return (
     <div>
       <p className={styles.pickerHint} id="slot-picker-hint">
-        Click a start hour, then a later hour to book a multi-hour session.
-        Bookings run between 08:00 and 18:00 ICT (UTC+7).
+        Click a start hour, then a later hour to book a multi-hour session, up
+        to {MAX_BOOKING_HOURS} hours. Bookings run between 08:00 and 18:00 ICT
+        (UTC+7).
       </p>
       <div
         className={styles.slotGrid}

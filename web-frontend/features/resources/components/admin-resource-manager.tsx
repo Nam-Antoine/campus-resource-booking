@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { BrandMark } from "@/components/brand-mark";
+import { AdminHeader } from "@/components/admin-header";
 import { PaginationNav } from "@/components/pagination-nav";
 import {
   EquipmentIcon,
@@ -10,7 +10,6 @@ import {
   MapPinIcon,
   RoomIcon,
 } from "@/components/icons";
-import { LogoutButton } from "@/features/auth/components/logout-button";
 import type { User } from "@/features/auth/types";
 import {
   createResource,
@@ -643,25 +642,7 @@ export function AdminResourceManager({
 
   return (
     <main className={styles.page}>
-      <header className={styles.header}>
-        <BrandMark />
-        <nav className={styles.adminNav} aria-label="Administrator sections">
-          <Link href="/admin/resources" aria-current="page">Resources</Link>
-          <Link href="/admin/users">Users</Link>
-          <Link href="/admin/analytics">Analytics</Link>
-          <Link href="/staff">Approvals</Link>
-        </nav>
-        <div className={styles.identity}>
-          <span>
-            <strong>{user.fullName}</strong>
-            <small>Administrator</small>
-          </span>
-          <LogoutButton
-            className={styles.logout}
-            errorClassName={styles.logoutError}
-          />
-        </div>
-      </header>
+      <AdminHeader fullName={user.fullName} current="resources" />
 
       <div className={styles.shell}>
         <section

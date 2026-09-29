@@ -132,6 +132,7 @@ export class BookingsController {
         if (
           error.code === 'INVALID_BOOKING_DATE' ||
           error.code === 'INVALID_BOOKING_RANGE' ||
+          error.code === 'BOOKING_TOO_LONG' ||
           error.code === 'BOOKING_IN_PAST'
         ) {
           throw new BadRequestException(body);

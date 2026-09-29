@@ -8,6 +8,12 @@ export const BOOKING_WINDOW_START = '08:00';
 export const BOOKING_WINDOW_END = '18:00';
 
 /**
+ * Longest single reservation a student may make, in whole hours. A booking's
+ * span (endTime − startTime) must not exceed this.
+ */
+export const BOOKING_MAX_DURATION_HOURS = 3;
+
+/**
  * Intersects a resource's operating hours with the campus booking window.
  * The result is the effective bookable span; when the resource never overlaps
  * the window, `open` is at or after `close` and no slots are bookable.

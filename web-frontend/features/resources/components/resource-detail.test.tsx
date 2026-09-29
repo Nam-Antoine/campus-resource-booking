@@ -203,7 +203,7 @@ describe("ResourceDetail", () => {
     await userEvent.click(screen.getByRole("button", { name: "11:00 to 12:00" }));
 
     expect(screen.getByText(/09:00–12:00 selected/)).toBeVisible();
-    expect(screen.getByText(/3 hours/)).toBeVisible();
+    expect(screen.getByText(/· 3 hours/)).toBeVisible();
     expect(
       screen.getByRole("button", { name: "10:00 to 11:00" }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -212,6 +212,95 @@ describe("ResourceDetail", () => {
     ).toHaveAttribute(
       "href",
       `/resources/${resource.id}?date=2099-01-05&startTime=09%3A00&endTime=12%3A00`,
+    );
+  });
+
+  it("grows a range to 3 hours by clicking successive blocks", async () => {
+    const availability: ResourceAvailability = {
+      resourceId: resource.id,
+      date: "2099-01-05",
+      timeZone: "Asia/Ho_Chi_Minh",
+      status: "active",
+      operatingDays: [1, 2, 3, 4, 5, 6],
+      opensAt: "08:00",
+      closesAt: "18:00",
+      blockedReason: null,
+      closureReason: null,
+      requiresApproval: true,
+      slots: [
+        { startTime: "09:00", endTime: "10:00" },
+        { startTime: "10:00", endTime: "11:00" },
+        { startTime: "11:00", endTime: "12:00" },
+        { startTime: "12:00", endTime: "13:00" },
+      ],
+    };
+
+    render(
+      <ResourceDetail
+        user={user}
+        resource={resource}
+        availability={availability}
+        checkedDate={availability.date}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "09:00 to 10:00" }));
+    await userEvent.click(screen.getByRole("button", { name: "10:00 to 11:00" }));
+    expect(screen.getByText(/09:00–11:00 selected/)).toBeVisible();
+    // A third successive block must reach 3 hours, not reset the selection.
+    await userEvent.click(screen.getByRole("button", { name: "11:00 to 12:00" }));
+
+    expect(screen.getByText(/09:00–12:00 selected/)).toBeVisible();
+    expect(screen.getByText(/· 3 hours/)).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Use 09:00–12:00" }),
+    ).toHaveAttribute(
+      "href",
+      `/resources/${resource.id}?date=2099-01-05&startTime=09%3A00&endTime=12%3A00`,
+    );
+  });
+
+  it("caps selection at 3 hours, restarting when a longer span is clicked", async () => {
+    const availability: ResourceAvailability = {
+      resourceId: resource.id,
+      date: "2099-01-05",
+      timeZone: "Asia/Ho_Chi_Minh",
+      status: "active",
+      operatingDays: [1, 2, 3, 4, 5, 6],
+      opensAt: "08:00",
+      closesAt: "18:00",
+      blockedReason: null,
+      closureReason: null,
+      requiresApproval: true,
+      slots: [
+        { startTime: "09:00", endTime: "10:00" },
+        { startTime: "10:00", endTime: "11:00" },
+        { startTime: "11:00", endTime: "12:00" },
+        { startTime: "12:00", endTime: "13:00" },
+        { startTime: "13:00", endTime: "14:00" },
+      ],
+    };
+
+    render(
+      <ResourceDetail
+        user={user}
+        resource={resource}
+        availability={availability}
+        checkedDate={availability.date}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "09:00 to 10:00" }));
+    // 09:00–14:00 would be 5 hours; the picker restarts at the clicked slot.
+    await userEvent.click(screen.getByRole("button", { name: "13:00 to 14:00" }));
+
+    expect(screen.getByText(/13:00–14:00 selected/)).toBeVisible();
+    expect(screen.queryByText(/09:00–14:00 selected/)).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Use 13:00–14:00" }),
+    ).toHaveAttribute(
+      "href",
+      `/resources/${resource.id}?date=2099-01-05&startTime=13%3A00&endTime=14%3A00`,
     );
   });
 
