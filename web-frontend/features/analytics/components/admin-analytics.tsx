@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { AdminHeader } from "@/components/admin-header";
+import { AnalyticsRangeForm } from "./analytics-range-form";
 import type { User } from "@/features/auth/types";
 import type { AnalyticsSummary } from "../types";
 import styles from "./admin-analytics.module.css";
@@ -40,12 +40,7 @@ export function AdminAnalytics({ user, summary }: { user: User; summary: Analyti
           <p className={styles.rangeText}><strong>{displayDate(summary.from)}–{displayDate(summary.to)}</strong><span>Campus dates · ICT (UTC+7)</span></p>
         </section>
 
-        <form className={styles.filters} method="get" action="/admin/analytics">
-          <label><span>From</span><input type="date" name="from" defaultValue={summary.from} required /></label>
-          <label><span>To</span><input type="date" name="to" defaultValue={summary.to} required /></label>
-          <button type="submit">Update analytics</button>
-          <Link href="/admin/analytics">Last 30 campus days</Link>
-        </form>
+        <AnalyticsRangeForm from={summary.from} to={summary.to} />
 
         <section className={styles.summary} aria-label="Booking analytics summary">
           <article className={styles.primaryMetric}>

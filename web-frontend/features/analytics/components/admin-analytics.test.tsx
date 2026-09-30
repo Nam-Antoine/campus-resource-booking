@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AdminAnalytics } from "./admin-analytics";
 import type { AnalyticsSummary } from "../types";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 const user = { id: "10000000-0000-4000-8000-000000000001", email: "admin@usth.edu.vn", fullName: "Analytics Admin", role: "admin" as const, createdAt: "2099-01-01T00:00:00.000Z" };
 const statuses = [
@@ -65,6 +66,27 @@ describe("AdminAnalytics", () => {
     expect(screen.getByText("Not available")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "No bookings fall inside this range" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Most-booked resources" })).not.toBeInTheDocument();
+  });
+
+  it("applies a valid date range immediately, without a button click", () => {
+    render(<AdminAnalytics user={user} summary={summary} />);
+    push.mockClear();
+    fireEvent.change(screen.getByLabelText("To"), {
+      target: { value: "2099-04-15" },
+    });
+    expect(push).toHaveBeenCalledWith(
+      "/admin/analytics?from=2099-03-01&to=2099-04-15",
+    );
+  });
+
+  it("does not navigate for a reversed range", () => {
+    render(<AdminAnalytics user={user} summary={summary} />);
+    push.mockClear();
+    // Move "From" past the current "To" (2099-03-31).
+    fireEvent.change(screen.getByLabelText("From"), {
+      target: { value: "2099-05-01" },
+    });
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("links to staff approvals from the administrator navigation", () => {
