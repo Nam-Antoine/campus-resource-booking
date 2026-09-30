@@ -18,7 +18,11 @@ Open http://localhost:18321. To run everything in Docker instead, see the [root 
 
 - Browser requests go to `NEXT_PUBLIC_API_URL` (default `http://localhost:18320/api`) with `credentials: "include"`. The value is compiled in, so rebuild after changing it.
 - Server Components use `INTERNAL_API_URL` when set (Docker uses `http://backend:18320/api`) and forward the user's cookie.
-- The session token lives only in an `httpOnly` cookie; frontend code never reads or stores it.
+- The session token lives only in an `httpOnly` cookie; frontend code never reads or stores it. Deactivation invalidates earlier cookies even after reactivation; existing users must sign in again after the session-version migration. An `httpOnly` cookie reduces direct token theft but does not eliminate XSS.
+
+## Search and availability
+
+Choose a date with **Any start** and **Any end** to find resources free for their entire operating day, provided that day has not begun. To search part of a day, choose both **From** and **Until**. The dated resource view lets students choose up to three consecutive free hours between 08:00 and 18:00 ICT, subject to the resource's operating schedule. The student dashboard shows availability for up to three active resources, with horizontally scrollable operating-hour bands and a keyboard-accessible timeline when needed. Booking and resource changes notify connected views to refresh; the API remains authoritative.
 
 ## Booking confirmation and arrival
 

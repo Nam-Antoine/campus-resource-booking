@@ -3,7 +3,6 @@ import Link from "next/link";
 import { BookingRequestForm } from "@/features/bookings/components/booking-request-form";
 import { BrandMark } from "@/components/brand-mark";
 import {
-  ArrowRightIcon,
   ChevronLeftIcon,
   ClockIcon,
   EquipmentIcon,
@@ -325,17 +324,6 @@ export function ResourceDetail({
                 <span>{resource.building.address}</span>
                 <small>{resource.location}</small>
               </div>
-            </section>
-
-            <section className={styles.comparePanel} aria-labelledby="compare-title">
-              <div>
-                <p>Need another option?</p>
-                <h2 id="compare-title">Compare campus resources</h2>
-                <span>Return to the directory to filter by date, time, capacity, and equipment.</span>
-              </div>
-              <Link href="/resources">
-                Compare other resources <ArrowRightIcon />
-              </Link>
             </section>
           </aside>
         </div>

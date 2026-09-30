@@ -90,7 +90,7 @@ the spelling changed.** Be ready to point at the line.
 | `gunicorn --workers 4` behind nginx                     | Docker Compose; Nest and Next each in their own container, health-gated              |
 | `EventSource` on `/api/events`                        | Socket.IO on `/ws`, cookie-authenticated                                            |
 | `useState`, `useEffect`, `useParams`                | The same hooks, plus Server Components for the initial load                          |
-| CI running your tests                                     | `.github/workflows/ci.yml`: frontend, backend, e2e, CodeQL                         |
+| CI running your tests                                     | `.github/workflows/ci.yml`: frontend, backend, PostgreSQL e2e, compiled-container startup/migrations; CodeQL runs separately                         |
 
 One sentence for the stage: *"We made every decision the course asked us to make
 — ownership in the WHERE clause, slow hashing, a secret from the environment, one
@@ -121,8 +121,8 @@ The talk plan, demo setup and rehearsal rules are in the
 [presentation kit](./presentation/README.md#5-minute-talk-plan), next to the
 diagrams and wireframes they use. How that plan meets the brief:
 
-- **The app runs live, not a video.** Four of the five minutes are a demo, with
-  one minute of slides.
+- **The app runs live, not a video.** The plan gives roughly three and a half
+  minutes to the demo, one minute to slides, and the final half-minute to CI and wrap-up.
 - **Five minutes is about 700 spoken words**, so one person drives and one
   narrates.
 - **Polish is "a bonus, not a substitute".** No time goes on animations.

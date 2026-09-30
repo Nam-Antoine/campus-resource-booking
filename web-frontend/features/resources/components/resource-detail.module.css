@@ -252,7 +252,6 @@
 .detailPanel,
 .amenityPanel,
 .locationPanel,
-.comparePanel,
 .availabilityWorkspace {
   border: 1px solid rgba(42, 60, 149, 0.12);
   border-radius: 20px;
@@ -435,8 +434,7 @@
   margin: 0;
 }
 
-.availabilityHeading p,
-.comparePanel p {
+.availabilityHeading p {
   color: var(--usth-blue);
   font-size: 0.75rem;
   font-weight: 780;
@@ -671,55 +669,9 @@
   color: var(--usth-blue);
 }
 
-.comparePanel {
-  overflow: hidden;
-  padding: 22px;
-  background:
-    linear-gradient(145deg, rgba(42, 60, 149, 0.055), transparent 52%),
-    var(--white);
-}
-
-.comparePanel h2 {
-  margin: 3px 0 0;
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  line-height: 1.2;
-  letter-spacing: -0.03em;
-}
-
-.comparePanel div > span {
-  display: block;
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
-.comparePanel > a {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 18px;
-  padding-top: 16px;
-  color: var(--usth-blue);
-  border-top: 1px solid rgba(42, 60, 149, 0.1);
-  font-size: 0.82rem;
-  font-weight: 780;
-}
-
-.comparePanel > a svg {
-  width: 18px;
-  height: 18px;
-}
-
 @media (max-width: 900px) {
   .contentGrid {
     grid-template-columns: 1fr;
-  }
-
-  .sideColumn {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -793,7 +745,6 @@
   }
 
   .facts,
-  .sideColumn,
   .slotGrid {
     grid-template-columns: 1fr;
   }

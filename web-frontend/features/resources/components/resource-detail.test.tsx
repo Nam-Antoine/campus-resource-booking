@@ -62,6 +62,12 @@ describe("ResourceDetail", () => {
     expect(
       screen.getByRole("link", { name: "Back to resource directory" }),
     ).toHaveAttribute("href", "/resources");
+    expect(
+      screen.queryByRole("heading", { name: "Compare campus resources" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Compare other resources" }),
+    ).not.toBeInTheDocument();
   });
 
   it("prompts for a date and accurately limits operational availability", () => {

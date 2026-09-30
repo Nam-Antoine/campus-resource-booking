@@ -12,7 +12,7 @@
 | 🧑‍💼 **Staff** | Created at first startup, or by an admin | Approves or rejects requests and confirms check-in and check-out. |
 | 🛠️ **Admin** | Created at first startup, from `.env` | Manages resources, closures and users, and reads the analytics. |
 
-Registration always creates a **student**. Admins create staff accounts, and there is no way to change an account's role. The one exception is recovery: if no active admin is left, the admin account named in `.env` is made admin again at startup. Admins also have access to everything staff can do.
+Registration always creates a **student**. Admins create staff accounts, and no endpoint changes an account's role. At startup, a configured **existing inactive admin** can be reactivated if no active admin remains; an existing student or staff account is never promoted, even when its email matches the bootstrap setting. A missing admin account needs a new, unregistered bootstrap email and password. Admins also have access to everything staff can do.
 
 ## Use cases
 
@@ -47,9 +47,9 @@ flowchart LR
 ## Features by role
 
 ### 🎓 Student
-- **Search**: by keyword, building, type (room, laboratory, equipment), minimum capacity and amenity. Can also show only what is free at a chosen date and time.
+- **Search**: by keyword, building, type (room, laboratory, equipment), minimum capacity and amenity. A date with both times set to *Any* finds resources free for their entire operating day, only before that day starts; paired times find resources free for a specific interval.
 - **Availability grid**: the free hourly slots for a day. When someone else books a slot, it **disappears live**.
-- **Book** whole hours within opening hours, such as 09:00–11:00. The booking is confirmed at once, or goes to *pending* if the resource needs staff approval.
+- **Book** up to three consecutive whole hours within 08:00–18:00 ICT and the resource's opening hours, such as 09:00–11:00. The booking is confirmed at once, or goes to *pending* if the resource needs staff approval.
 - **My bookings**: upcoming bookings and history, with cancellation while eligible and a confirmation for approved bookings.
 - **Check-in**: show the confirmed booking in your signed-in account to staff. Staff match its details with their live record and confirm arrival from the scheduled start until the reservation ends.
 
@@ -62,8 +62,8 @@ flowchart LR
 
 ### 🛠️ Admin
 - **Resources**: create and edit rooms, labs and equipment, including capacity, amenities, opening hours and days, and whether approval is needed. Set a resource to *active*, *maintenance* or *inactive*.
-- **Closures**: close a resource on specific dates, such as holidays or repairs.
-- **Users**: search accounts, create staff accounts with an initial password, activate or deactivate. Roles cannot be changed. A deactivated user loses access on the next protected request, and active WebSocket connections are disconnected.
+- **Closures**: close a resource on specific dates, such as holidays or repairs; unresolved checked-in visits prevent a conflicting closure or schedule change even after their scheduled end.
+- **Users**: search accounts, create staff accounts with an initial password, activate or deactivate. Roles cannot be changed. Deactivation revokes existing cookies, including after reactivation; protected REST requests reject them and connected WebSockets are disconnected. A new sign-in is required.
 - **Analytics** for a date range: total bookings, status breakdown, cancellation rate, most-booked resources, peak hours and utilization rate.
 
 ## A booking's life

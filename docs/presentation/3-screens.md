@@ -91,8 +91,8 @@ Register: Full name · USTH email · Password · Confirm password
 │            │ Know what happens next: Find → Track → Check in   │
 │ [Sign out] │ What can I book? · Campus booking essentials      │
 └────────────┴───────────────────────────────────────────────────┘
-Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My bookings)
 ```
+The timeline shows operating hours for up to three active resources, not the entire catalog. On narrow screens it scrolls horizontally; swipe or focus it and use arrow keys to see later hours. Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My bookings).
 
 ### Search `/resources`
 ```
@@ -114,6 +114,8 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 └────────────────────────────────────────────────────────────────┘
 ```
 
+Search semantics: a date with both time controls set to *Any* finds resources wholly free for their operating day, only if it has not started. Choose both times for a partial-day interval; use the dated resource detail view to select up to three consecutive free hours between 08:00 and 18:00 ICT.
+
 ### Resource detail and booking `/resources/:id` (live)
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -121,8 +123,8 @@ Phone: the sidebar becomes a bottom tab bar (Overview · Resources · My booking
 ├──────────────────────────────────┬─────────────────────────────┤
 │ Check availability               │ Your booking                │
 │ Date [2026-09-29] [Check date]   │ Resource  Lab L201          │
-│ [07:00] [08:00] [10:00] [11:00]  │ Date      Tue 29 Sep        │
-│ [12:00] … (09:00 taken: hidden)  │ Time      10:00–11:00       │
+│ [08:00] [10:00] [11:00] [12:00]  │ Date      Tue 29 Sep        │
+│ … (09:00 taken: hidden)          │ Time      10:00–11:00       │
 │ ⟳ Availability refreshed.        │ [Send booking request]      │
 │                                  │ → "Booking confirmed." or   │
 │                                  │   "pending staff approval"  │
@@ -200,7 +202,7 @@ Admin pages share a top bar: **Resources · Users · Analytics · Approvals** (A
 ┌─ Manage bookable resources ────────────────────────────────────┐
 │ Total 46 · Active 40 · Maint. 3 · Inactive 3   [Add resource]  │
 ├────────────────────────────────────────┬───────────────────────┤
-│ Resource catalog                       │ Editing resource      │
+│ Resource catalog (URL-backed pages)    │ Editing resource      │
 │ Resource   Bldg  Cap  Rule   Status    │ Code, Type, Name      │
 │ Lab L201   LAB    40  Staff  [Active▾] │ Building, Location    │
 │ Room A101  MAIN   30  Auto   [Active▾] │ Capacity, Amenities   │
@@ -240,4 +242,4 @@ Admin pages share a top bar: **Resources · Users · Analytics · Approvals** (A
 └────────────────────────────────────────────────────────────────┘
 ```
 
-The numbers in these wireframes are made-up placeholders, not real data.
+The numbers in these wireframes are made-up placeholders, not real data. Catalog pages reload their own rows and total when the page number changes; the shown counts are not global status totals.

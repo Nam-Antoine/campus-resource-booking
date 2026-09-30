@@ -200,7 +200,7 @@ describe("student live dashboard", () => {
       />,
     );
 
-    expect(screen.getByText("No resources are available to compare.")).toBeVisible();
+    expect(screen.getByText("No resources are available to show.")).toBeVisible();
     expect(screen.getByText("No active reservations")).toBeVisible();
     expect(screen.getByText("No active resources are listed right now.")).toBeVisible();
     expect(screen.getByRole("link", { name: /Find a resource/ })).toHaveAttribute(

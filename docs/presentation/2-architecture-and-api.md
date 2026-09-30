@@ -39,9 +39,9 @@ flowchart LR
 ```
 
 - Every route **requires login** unless it is explicitly public. Only register, login and health are public.
-- The login token is a JWT stored in an **`httpOnly` cookie**, so page JavaScript cannot read the token directly. This reduces token theft from injected scripts but does not eliminate XSS or prevent malicious same-origin actions.
+- The login token is a JWT stored in an **`httpOnly` cookie**, so page JavaScript cannot read the token directly. This reduces token theft from injected scripts but does not eliminate XSS or prevent malicious same-origin actions. Protected REST requests and WebSocket handshakes also compare the token's `sessionVersion` to the user record: deactivation invalidates older cookies, even after reactivation. Pre-upgrade cookies need a new sign-in.
 - Unknown or extra input fields are **rejected**, not silently ignored.
-- Login and register have a tighter limit (10 per minute) to slow password guessing.
+- Login and register have a tighter limit (10 per minute, per client and route) to slow password guessing. In production, IP-based limiting assumes a trusted reverse proxy is the only path to the backend; Compose binds the API to host loopback. Validate the real proxy topology before relying on forwarded client IPs.
 
 ## Data model
 
@@ -58,6 +58,7 @@ erDiagram
         string email "must end in @usth.edu.vn"
         string role "student | staff | admin"
         bool isActive
+        int sessionVersion "revokes older cookies"
     }
     BUILDING {
         string code
@@ -88,7 +89,7 @@ erDiagram
 
 ## REST API
 
-Base URL: `http://localhost:18320/api`. Interactive docs (Swagger): `http://localhost:18320/api/docs`.
+Local API base URL: `http://localhost:18320/api` (host loopback only in Compose). Interactive docs (Swagger) are available at `http://localhost:18320/api/docs` outside production.
 
 ### Everyone
 | Method | Endpoint | What it does |
@@ -102,7 +103,7 @@ Base URL: `http://localhost:18320/api`. Interactive docs (Swagger): `http://loca
 ### Browsing resources (any logged-in user)
 | Method | Endpoint | What it does |
 | --- | --- | --- |
-| GET | `/resources` | Search, with filters: text, building, type, capacity, amenity, free at a date and time; paginated |
+| GET | `/resources` | Search by text, building, type, capacity, amenity; a date with no times requires the entire operating day to be free (before it starts), while paired times search an interval; paginated |
 | GET | `/resources/buildings` | Building list for the filter (cached) |
 | GET | `/resources/{id}` | One resource's details |
 | GET | `/resources/{id}/availability?date=` | The free hourly slots for a day |
@@ -172,13 +173,13 @@ sequenceDiagram
 ```
 
 - **`availability:changed`** goes to everyone viewing that resource on that day. The student dashboard's "Today's availability" timeline also receives it for that date and refreshes.
-- **`resource:changed`** goes out when an admin edits a resource or changes its status.
+- **`resource:changed`** goes out when an admin creates or edits a resource or changes its status. The dashboard refreshes its sample of up to three resources; the resource detail view refreshes on relevant changes.
 - By default, a background job runs every minute (`BOOKING_RELEASE_INTERVAL_SECONDS`; `0` disables it). After the scheduled end it marks unchecked confirmed bookings as no-shows and unreviewed pending requests as expired. Until the update is persisted, their original statuses may still hold the slot; the job sends `availability:changed` so clients can refresh. Elapsed hours cannot be rebooked.
-- A WebSocket connection needs a valid session. It is closed when the session expires or the user is deactivated.
+- A WebSocket connection needs a valid session version. It is closed when the session expires or the user is deactivated; a stale cookie cannot reconnect after reactivation. The immediate disconnect signal is in-process, so multiple API instances would need coordinated event delivery.
 
 ## Performance in one table
 
-Measured with 50,000 bookings ([full report](../benchmarks/performance-comparison.md)):
+Measured on a synthetic dataset of 50,000 bookings ([full report](../benchmarks/performance-comparison.md)); mixed-read capacity used raised rate limits and is not a production guarantee:
 
 | What | Result |
 | --- | --- |

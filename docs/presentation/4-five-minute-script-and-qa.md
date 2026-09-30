@@ -12,15 +12,15 @@
 
 > There are three roles: students book resources, staff handle approvals and visits, and admins manage the system. Let me start as a student. Here I can search by date, time, building, type, capacity, and amenities. Availability takes opening hours, closures, existing bookings, and past time slots into account.
 >
-> I select an available laboratory and book a time slot. Because this laboratory requires approval, the request becomes **pending**. For a resource without that rule, it would be **confirmed** immediately. Approval belongs to the *resource*, not to the student's account. The slot is reserved even while approval is pending, so someone else cannot take it. I can see the result and my booking history under **My bookings**.
+> With a date and both time controls at *Any*, search finds resources free for their entire operating day, only before that day starts; I choose both times for a particular interval. Bookings are limited to three consecutive hours within 08:00–18:00 ICT and the resource's opening hours. I select an available laboratory and book a time slot. Because this laboratory requires approval, the request becomes **pending**. For a resource without that rule, it would be **confirmed** immediately. Approval belongs to the *resource*, not to the student's account. The slot is reserved even while approval is pending, so someone else cannot take it. I can see the result and my booking history under **My bookings**.
 
-**Do:** Open `/resources`, apply a filter, show a lab's availability, then submit a booking. If a live booking is not practical, show the seeded pending booking instead. Do not book a slot needed by the next presenter.
+**Do:** Open `/resources`, apply a filter, choose a future date and a daytime interval between 08:00 and 18:00 ICT, show the lab's availability, then submit a booking. If a live booking is not practical, show the seeded pending booking instead. Do not book a slot needed by the next presenter.
 
 ### 1:35–2:25 — Staff operations (staff window)
 
 > In the staff account, the request appears in the approval queue. Staff can approve it, changing its status from pending to confirmed, or reject it with a reason. For a current confirmed booking, the student shows their confirmation in their signed-in account. Staff compare its full booking ID, student identity, resource, and time with the live record and **confirm check-in manually**. They then confirm check-out when the visit is complete. After the scheduled end, staff can record a no-show or the periodic release job will do it and expire unreviewed pending requests. This version does **not** use a six-digit code or QR code for check-in.
 
-**Do:** Approve the pending request. Have the student show the seeded current booking in their account, match it against the staff record, then confirm check-in and check-out. Check-in is permitted **from the scheduled start until the reservation ends**, not before. If the seeded booking has ended, show the operations screen and describe the process instead.
+**Do:** Approve the pending request. For a representative live visit, seed between **08:00 and 17:59 ICT**; have the student show the current confirmed booking, match it against the staff record, then confirm check-in and check-out **before its scheduled end**. Check-in is permitted from the scheduled start **up to, but not including**, the end. The seed still inserts a current-hour booking through 22:59 by writing directly to the database, but a new student booking beginning at or after 18:00 is not allowed. Outside the usable demo window, show the operations screen and describe the process instead.
 
 ### 2:25–3:00 — Admin and real-time updates (admin window)
 
@@ -83,7 +83,7 @@ You will probably answer **3–5 questions**, not all of the following. Lead wit
 
 ### How does check-in work now?
 
-> The student shows the confirmed booking in their signed-in account. Staff compare its full booking ID, student identity, resource, and time with the live staff record and confirm check-in without a code or QR scan. Staff can check in from the scheduled start until the reservation ends, then record check-out. If nobody checks in by the end, the release process records a no-show (or staff can mark it then); elapsed hours cannot be booked again.
+> The student shows the confirmed booking in their signed-in account. Staff compare its full booking ID, student identity, resource, and time with the live staff record and confirm check-in without a code or QR scan. Staff can check in from the scheduled start up to, but not including, the reservation end, then record check-out. If nobody checks in by the end, the release process records a no-show (or staff can mark it then); elapsed hours cannot be booked again.
 
 ### Why put the JWT in an httpOnly cookie?
 
@@ -95,11 +95,11 @@ You will probably answer **3–5 questions**, not all of the following. Lead wit
 
 ### What happens when an admin deactivates an account?
 
-> The authentication strategy looks up the user again on protected requests. An inactive account loses access rather than waiting for the JWT to expire. Admin-management rules also prevent accidental loss of the last active administrator.
+> The authentication strategy looks up the user and checks the session version on protected requests. Deactivation increments that version, so the old cookie stays invalid even after reactivation; a new sign-in is required. Connected WebSockets are disconnected. Admin-management rules also prevent accidental loss of the last active administrator, and bootstrap recovery never promotes an existing student or staff account.
 
 ### Is availability really real-time?
 
-> Booking and resource changes trigger Socket.IO events. Authenticated clients subscribe to resource-and-date rooms, receive a notification, and refresh the relevant data. The database remains authoritative: a WebSocket event is a refresh signal, not permission to bypass booking validation.
+> Booking and resource creation or changes trigger Socket.IO events. Authenticated clients subscribe to resource-and-date rooms, receive a notification, and refresh the relevant data. The database remains authoritative: a WebSocket event is a refresh signal, not permission to bypass booking validation.
 
 ### What do the analytics mean?
 
@@ -120,7 +120,7 @@ You will probably answer **3–5 questions**, not all of the following. Lead wit
 ## Before presenting
 
 - Rebuild the stack and check health: `docker compose up -d --build` then `docker compose ps`. **Do not** delete the PostgreSQL volume.
-- If using demo records, follow [MVP release demo-data instructions](../MVP_RELEASE.md#5-demo-data), seed just before the talk, and note the current booking's check-in window. Use separate browser profiles for student, staff, and admin because one profile shares one login cookie.
+- If using demo records, follow [MVP release demo-data instructions](../MVP_RELEASE.md#5-demo-data), ideally seed just before the talk during 08:00–17:59 ICT for a live, in-window check-in. The seed inserts current-hour visits until 22:59, but those beginning at or after 18:00 are seed-only exceptions and cannot be booked through the student flow. Outside 08:00–22:59 it omits the visit. Use separate browser profiles for student, staff, and admin because one profile shares one login cookie.
 - Keep a screenshot or the diagrams in [this presentation kit](README.md) as fallback, but present the running app if the course requires it.
 - Clean up local demo data afterward with the documented `npm run demo:clean` command. Do not disclose demo passwords on slides.
 - Rehearse aloud at least twice and finish around **4:40–4:50**, leaving a small timing buffer.

@@ -229,7 +229,7 @@ export function StudentDashboard({
               <p className={styles.context}>Student workspace</p>
               <h1 id="dashboard-title">Good to see you, {user.fullName}.</h1>
               <p>
-                Choose a time first, then compare the campus resources that fit.
+Check today&apos;s availability, then find a resource for your time.
               </p>
             </div>
             <Link className={styles.primaryAction} href="/resources">
@@ -318,7 +318,7 @@ export function StudentDashboard({
               <div className={styles.noAvailability}>
                 <ClockIcon />
                 <p>
-                  <strong>No resources are available to compare.</strong>
+                  <strong>No resources are available to show.</strong>
                   Check the directory for operational updates.
                 </p>
               </div>
