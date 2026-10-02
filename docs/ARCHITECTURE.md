@@ -8,8 +8,7 @@ because they only make sense once you have seen what they serve.
 For the course brief and the grading checklist, see
 [`COURSE_PROJECT.md`](./COURSE_PROJECT.md); for the talk, the
 [presentation kit](./presentation/README.md). Product scope is in the
-[proposal](./Campus_Resource_Booking_Project_Proposal_EN.docx); contributor
-rules are in [`../AGENTS.md`](../AGENTS.md).
+[proposal](./Campus_Resource_Booking_Project_Proposal_EN.docx).
 
 **What it is.** A USTH web application for booking rooms, laboratories, and
 equipment. Students search and reserve; staff approve requests and run check-in
@@ -587,7 +586,6 @@ error boundary.
 
 The brand foundation is fixed — royal blue `#2A3C95`, red `#EC2227`, white —
 with glassmorphism applied hierarchically and mobile layouts task-first.
-Details: [`../.pi/skills/frontend-design/SKILL.md`](../.pi/skills/frontend-design/SKILL.md).
 
 ---
 

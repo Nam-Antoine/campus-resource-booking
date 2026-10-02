@@ -135,7 +135,7 @@ Behaviour:
 
 ## 6. Browser smoke matrix
 
-Use the Playwright CLI instructions in `AGENTS.md`. Exercise real actions, not page loads only.
+Run each flow in a real browser (for example with the Playwright CLI). Exercise real actions, not page loads only.
 
 ### Student
 

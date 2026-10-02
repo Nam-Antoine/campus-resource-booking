@@ -2,10 +2,8 @@
 .git
 .gitignore
 .github
-.pi
 .playwright-cli
 **/.playwright-cli
-AGENTS.md
 
 # Dependencies and generated output
 **/node_modules
